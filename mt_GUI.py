@@ -23,17 +23,12 @@ mavconn_established = False
 global PADAconn_established
 PADAconn_established = False
 
+global reportMavConn
+reportMavConn = True
+
 global mav_conn
+mav_conn = None
 global PADA_conn
-
-mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
-mav_conn.wait_heartbeat(timeout=5)
-
-
-
-
-PADA_conn = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600) # for macos
-PADA_conn.wait_heartbeat(timeout=5)
 
 #####---------------------- GLOBAL VARIABLES ######################################################################
 data = {
@@ -51,6 +46,9 @@ triesForMission = 0
 
 colorArray = ["BLUE", "ORANGE", "PURPLE", "RED", "YELLOW"]
 colorPWM = [1750, 1650, 1450, 1550, 1850]
+
+global detectedValue
+detectedValue = 898
 
 FIELD_ALTITUDE = 704 # in FEET
 
@@ -101,6 +99,7 @@ global statusRecieved
 global colorWaitRecieved 
 
 global current_color
+
 
 global sysvar
 global sysstart
@@ -196,14 +195,43 @@ log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
 log.insert(1.0, "Welcome to the CSUN Aeronautics Ground Station Log\n")
 #---------------------------- END OF LOG TEXT BOX  ----------------------------
+# --------------------------- Establishing connection to primary and PADA  . --------------------------
+def establish_mav_connection(report):
+    global mavconn_established
+    global PADAconn_established
+    global mav_conn
+    global PADA_conn
+    try:
+        # Attempt to establish a MAVLink connection
+        mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
+        heartbeat = mav_conn.wait_heartbeat(timeout=5)
+        
+        if heartbeat is None:
+            mavconn_established = False
+            if report:
+                log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
+            # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
+            # print("No heartbeat received. Connection not established.")
+        else:
+            mavconn_established = True
+            log.insert(1.0, "Connection successfully established To Orange Cube!\n", "color1")
+            # print("Connection successfully established!")
+        
+    except Exception as e:
+        if report:
+            log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
+        # Handle cases where connection fails for other reasons
+        # log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
+        pass
 
+establish_mav_connection(True)
 # --------------------------- ALL THE FUNCTIONALITY OF THE BUTTONS DOWN BELOW , NOTTE THESE ARE SEPERATE FROM THE THREADS . --------------------------
 
 def start_system():
-        global programRunning
-        if programRunning == False:
-            mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 2, 1200, 0, 0 , 0, 0, 0)
-            programRunning = True
+    global programRunning
+    if programRunning == False:
+        mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 2, 1200, 0, 0 , 0, 0, 0)
+        programRunning = True
 
 launchstatvar = ttk.Label(window, text="", font=('None', 20))
 launchstatvar.pack()
@@ -276,16 +304,23 @@ def sendMissionToPADA(lat, lon):
     # thread3 = threading.Thread(target=check_missions_on_pada, args=(PADA_conn,))
     # thread3.start()
     # thread3.join()
+    # PADA_conn = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600) # for macos
+    # PADA_conn.wait_heartbeat(timeout=5)
     print("doneeeeeeeeeee")
 
 def stopDetection():
-        if DAS_runnning == True:
-            print(event_listener)
-            mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 1000 , 0 , 0, 0, 0, 0)
-            log.insert(1.0, "DAS STOPPED\n")    
+    if DAS_runnning == True:
+        print(event_listener)
+        mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 1000 , 0 , 0, 0, 0, 0)
+        log.insert(1.0, "DAS STOPPED\n")    
 
 
 def initialization():
+    global detectedValue
+    detectedValue = 898
+    global reportMavConn
+    reportMavConn = False
+    global mavconn_established
     global padaReadyToRelease
     padaReadyToRelease = False
     global colorWaitRecieved
@@ -390,123 +425,109 @@ def getHeartbeat():
     global errorRecieved
     global errorHandled
     global triesForMission
+    global detectedValue
 
     while True:
-        globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
-        data['altitude'] = ((globalPosition.alt * 3.2808 ) / 1000 ) - FIELD_ALTITUDE #+ 880 #Chnage to airfield alt
-        data['headingAngle'] = globalPosition.hdg / 100
-        data['latitude'] = globalPosition.lat / 1e7
-        data['longitude'] = globalPosition.lon / 1e7
-        # ============================================
-        vfrHud = mav_conn.recv_match(type = 'VFR_HUD', blocking=True)
-        data['speed'] = vfrHud.airspeed
-        # ============================================
-        powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
-        data['powerstatus'] = powerStatus.Vcc / 1000
-        # ============================================
-        # padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
-        # data['padaSpeed'] = padaSpeed.airspeed
-        # ============================================
-        servo_msg = mav_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True)
-        if not any(existing_code == servo_msg.servo5_raw for existing_code, _ in event_listener) and servo_msg.servo5_raw != 0:
-            if servo_msg.servo5_raw == 1500 and jetsonReady == False and servo_msg.servo5_raw != 0:
-                event_listener.append((servo_msg.servo5_raw , datetime.now()))
-                jetsonReady = True
-                sysvar.set("Jetson Ready \u2713")  # \u2713 is the unicode for a check mark symbol
-                # sysstart.pack() 
-                sysstart.place(x=0.12*(screen_width), y=0.6*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
-                # log.tag_configure("color1", foreground="green")  # Change "red" to the desired color
-                log.insert(1.0, f"code {servo_msg.servo5_raw} : Jetson ready \n", "color1")
+        if mavconn_established == True and mav_conn is not None:
+            globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
+            if globalPosition is not None:
+                data['altitude'] = ((globalPosition.alt * 3.2808 ) / 1000 ) - FIELD_ALTITUDE #+ 880 #Chnage to airfield alt
+                data['headingAngle'] = globalPosition.hdg / 100
+                data['latitude'] = globalPosition.lat / 1e7
+                data['longitude'] = globalPosition.lon / 1e7
+            # ============================================
+            vfrHud = mav_conn.recv_match(type = 'VFR_HUD', blocking=True)
+            if vfrHud is not None:
+                data['speed'] = vfrHud.airspeed
+            # ============================================
+            powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
+            if powerStatus is not None:
+                data['powerstatus'] = powerStatus.Vcc / 1000
+            # ============================================
+            # padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
+            # data['padaSpeed'] = padaSpeed.airspeed
+            # ============================================
+            servo_msg = mav_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True)
+            if not any(existing_code == servo_msg.servo5_raw for existing_code, _ in event_listener) and servo_msg.servo5_raw != 0:
+                if servo_msg.servo5_raw == 1500 and jetsonReady == False and servo_msg.servo5_raw != 0:
+                    event_listener.append((servo_msg.servo5_raw , datetime.now()))
+                    jetsonReady = True
+                    sysvar.set("Jetson Ready \u2713")  # \u2713 is the unicode for a check mark symbol
+                    # sysstart.pack() 
+                    sysstart.place(x=0.12*(screen_width), y=0.6*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+                    # log.tag_configure("color1", foreground="green")  # Change "red" to the desired color
+                    log.insert(1.0, f"code {servo_msg.servo5_raw} : Jetson ready \n", "color1")
 
-        
-        if not any(existing_code == servo_msg.servo1_raw for existing_code, _ in event_listener) and servo_msg.servo1_raw != 0:
-            event_listener.append((servo_msg.servo1_raw , datetime.now()))
-            if any(existing_code == servo_msg.servo1_raw for existing_code in errorCodes) :
-                if servo_msg.servo1_raw not in errorRecieved:
-                    errorHandled = True if errorHandled == False else ()
-                    errorRecieved.append(servo_msg.servo1_raw)
-                    log.insert(1.0, f"ERROR! CODE: {servo_msg.servo1_raw}\n", "color3")
-                    sysvar.set("Jetson Stopped ")
-
-            elif servo_msg.servo1_raw == 1440 and colorRecieved == True:
-                colorRecieved = False
-                log.insert(1.0, f"code {servo_msg.servo1_raw} : Detection Stopped \n", "color1")
             
-            elif servo_msg.servo1_raw == 1600 and colorWaitRecieved == False:
-                colorWaitRecieved = True
-                log.insert(1.0, f"code {servo_msg.servo1_raw} : Jetson waiting for color ... \n", "color1")
-                
-            elif servo_msg.servo1_raw ==1900 and statusRecieved == False:
-                statusRecieved = True
-                log.insert(1.0, f"code {servo_msg.servo1_raw} : Initialization on jetson was successful \n", "color1")
-                
-            elif servo_msg.servo1_raw == 900 :
-                log.insert(1.0, f"code {servo_msg.servo1_raw} : Detected a Target  \n", "color1")
-                
-            elif servo_msg.servo1_raw == 800 :
-                log.insert(1.0, f"code {servo_msg.servo1_raw} : Did not detect a target  \n", "color2")
-                
-            elif servo_msg.servo1_raw in colorPWM and colorRecieved == False:
-                colorRecieved = True
-                current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
-                # rs.set(f"DAS Runnning | {current_color} ")
-                log.insert(1.0, f"code {servo_msg.servo1_raw} : DAS running with color : {current_color}\n", "color1")
-                DAS_runnning = True
-                
-            if any(existing_code == 1440 for existing_code, _ in event_listener) and missionRecieved == False: 
-                sleep(3)
-                mav_conn.waypoint_request_list_send()
-                servo_msg_for_mission = mav_conn.recv_match(type='MISSION_COUNT', blocking=True, timeout=5)
+            if not any(existing_code == servo_msg.servo1_raw for existing_code, _ in event_listener) and servo_msg.servo1_raw != 0:
+                event_listener.append((servo_msg.servo1_raw , datetime.now()))
+                if any(existing_code == servo_msg.servo1_raw for existing_code in errorCodes) :
+                    if servo_msg.servo1_raw not in errorRecieved:
+                        errorHandled = True if errorHandled == False else ()
+                        errorRecieved.append(servo_msg.servo1_raw)
+                        log.insert(1.0, f"ERROR! CODE: {servo_msg.servo1_raw}\n", "color3")
+                        sysvar.set("Jetson Stopped ")
 
-                if servo_msg_for_mission is None and triesForMission < 3:
-                    log.insert(1.0, f"Failed to receive mission count {triesForMission}\n", "color3")
-                    for i in range(len(event_listener) - 1, -1, -1):  # Start from the last index, go to 0
-                        if 1440 in event_listener[i]:
-                            del event_listener[i]  # Use del to remove the item at index i
-                            triesForMission += 1
-                            break
-                elif servo_msg_for_mission:
-                    log.insert(1.0, f"Mission count received: {servo_msg_for_mission.count}\n", "color1")
-                    missionRecieved = True
-                    lat = 0.0
-                    lon = 0.0
-                    for i in range(servo_msg_for_mission.count):
-                        print("hereee 4 ")
-                        mav_conn.waypoint_request_send(i)
-                        waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True)
-                        print(waypoint)
-                        # print(f"Waypoint {i + 1}: Latitude={waypoint.x}, Longitude={waypoint.y}, Altitude={waypoint.z}")
-                        if i == servo_msg_for_mission.count - 1:
-                            print("hereee 5 ")
-                            current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
-                            log_text = f"Mission Received coordinates for target {current_color} -> lat: {waypoint.x}, lon: {waypoint.y}\n"
-                            log.insert(1.0, log_text)
-                            lat = waypoint.x
-                            lon = waypoint.y
-                            sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
-                            sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+                elif servo_msg.servo1_raw == 1440 and colorRecieved == True:
+                    colorRecieved = False
+                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Detection Stopped \n", "color1")
+                
+                elif servo_msg.servo1_raw == 1600 and colorWaitRecieved == False:
+                    colorWaitRecieved = True
+                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Jetson waiting for color ... \n", "color1")
                     
-                    # total_waypoints = servo_msg_for_mission.count
-                    # if total_waypoints > 0:
-                    #     # Directly request the last waypoint, assuming 0-based indexing
-                    #     last_waypoint_index = total_waypoints - 1
-                    #     mav_conn.waypoint_request_send(last_waypoint_index)
-                    #     last_waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True, timeout=5)
-                        
-                    #     if last_waypoint is not None:
-                    #         log.insert(1.0, f"Last Waypoint: Latitude={last_waypoint.x}, Longitude={last_waypoint.y}\n")
-                    #         # Process the waypoint as needed
-                    #         lat = last_waypoint.x
-                    #         lon = last_waypoint.y
-                    #         # Example: Update the GUI or trigger further actions based on the lat/lon
-                    #         sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
-                    #         sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
-                    #     else:
-                    #         log.insert(1.0, "Failed to receive the last waypoint\n", "color3")
+                elif servo_msg.servo1_raw ==1900 and statusRecieved == False:
+                    statusRecieved = True
+                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Initialization on jetson was successful \n", "color1")
                     
-                    # sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
-                    # sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))   
+                elif servo_msg.servo1_raw == detectedValue :
+                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Detected a Target  \n", "color1")
+                    
+                elif servo_msg.servo1_raw == 800 :
+                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Did not detect a target  \n", "color2")
+                    
+                elif servo_msg.servo1_raw in colorPWM and colorRecieved == False:
+                    colorRecieved = True
+                    current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
+                    # rs.set(f"DAS Runnning | {current_color} ")
+                    log.insert(1.0, f"code {servo_msg.servo1_raw} : DAS running with color : {current_color}\n", "color1")
+                    DAS_runnning = True
+                    
+                if any(existing_code == 1440 for existing_code, _ in event_listener) and missionRecieved == False: 
+                    sleep(3)
+                    mav_conn.waypoint_request_list_send()
+                    servo_msg_for_mission = mav_conn.recv_match(type='MISSION_COUNT', blocking=True, timeout=5)
 
+                    if servo_msg_for_mission is None and triesForMission < 3:
+                        log.insert(1.0, f"Failed to receive mission count {triesForMission}\n", "color3")
+                        for i in range(len(event_listener) - 1, -1, -1):  # Start from the last index, go to 0
+                            if 1440 in event_listener[i]:
+                                del event_listener[i]  # Use del to remove the item at index i
+                                triesForMission += 1
+                                break
+                    elif servo_msg_for_mission:
+                        log.insert(1.0, f"Mission count received: {servo_msg_for_mission.count}\n", "color1")
+                        missionRecieved = True
+                        lat = 0.0
+                        lon = 0.0
+                        for i in range(servo_msg_for_mission.count):
+                            print("hereee 4 ")
+                            mav_conn.waypoint_request_send(i)
+                            waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True)
+                            print(waypoint)
+                            # print(f"Waypoint {i + 1}: Latitude={waypoint.x}, Longitude={waypoint.y}, Altitude={waypoint.z}")
+                            if i == servo_msg_for_mission.count - 1:
+                                print("hereee 5 ")
+                                current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
+                                log_text = f"Mission Received coordinates for target {current_color} -> lat: {waypoint.x}, lon: {waypoint.y}\n"
+                                log.insert(1.0, log_text)
+                                lat = waypoint.x
+                                lon = waypoint.y
+                                sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
+                                sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+
+        elif mavconn_established == False or mav_conn is None:
+            establish_mav_connection(False)
         sleep(0.5)
 
 def creategui():
@@ -712,10 +733,12 @@ def creategui():
 
     def selectColor():
         global colorRecieved
+        global detectedValue
         if color_pwm != 0:
             colorRecieved = False
             mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 8 , color_pwm, 0, 0, 0, 0, 0)
             log.insert(1.0, f"Color {selected_color.get()} is sent to PA\n")
+            detectedValue += 2
         
         
     def update_selected_color(*args):
@@ -817,48 +840,23 @@ def creategui():
 
 creategui()
 
-
-
-
-
-
-
-
-
-# =============================================================================================================
-
-#         from time import time
-#         end_time = time()
-#         elapsed_time = end_time - start_time
-#         if elapsed_time > 120 and not jetsonReady and errorHandled == False:
-#             sysvar.set("Jetson Unresponsive \u2715")
+# total_waypoints = servo_msg_for_mission.count
+                        # if total_waypoints > 0:
+                        #     # Directly request the last waypoint, assuming 0-based indexing
+                        #     last_waypoint_index = total_waypoints - 1
+                        #     mav_conn.waypoint_request_send(last_waypoint_index)
+                        #     last_waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True, timeout=5)
                             
-
-
-# -=====================================================================================
-# def update_das_arm_status(*args):
-#         global das_arm_status
-
-#         if rs.get() == "STOP":
-#             runstop.configure(background='red', foreground='black')
-#             das_arm_status = 1000
-#             log.insert(1.0, "DAS is ready to be STOPPED\n")
-#         else:
-#             log.insert(1.0, "DAS is not ready to Stop\n")
-# =================================================================================================
-#  def arm_pada(*args):
-#         global readyToLaunch
-#         if pada_arm.get() == "ARM" and missionRecieved:
-#             readyToLaunch = True
-#             # PADA_conn.mav.command_long_send(PADA_conn.target_system, PADA_conn.target_component,mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0, 1 , 21196 , 0 , 0, 0, 0, 0)
-#             # pada_msg = PADA_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True , timeout=5)
-#             pada_sel.configure(background='green', foreground='white')
-#             armedstatvar.config(text="ARMED")
-#             log.insert(1.0, "Ready to launch\n")
-#         else:
-#             readyToLaunch = False
-#             # PADA_conn.mav.command_long_send(PADA_conn.target_system, PADA_conn.target_component,mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0, 0 , 0 , 0 , 0, 0, 0, 0)
-#             # pada_msg = PADA_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True , timeout=5)
-#             pada_sel.configure(background='red', foreground='black')       
-#             armedstatvar.config(text="DISARMED")
-#             log.insert(1.0, "PADA Disarmed\n")
+                        #     if last_waypoint is not None:
+                        #         log.insert(1.0, f"Last Waypoint: Latitude={last_waypoint.x}, Longitude={last_waypoint.y}\n")
+                        #         # Process the waypoint as needed
+                        #         lat = last_waypoint.x
+                        #         lon = last_waypoint.y
+                        #         # Example: Update the GUI or trigger further actions based on the lat/lon
+                        #         sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
+                        #         sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+                        #     else:
+                        #         log.insert(1.0, "Failed to receive the last waypoint\n", "color3")
+                        
+                        # sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
+                        # sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
