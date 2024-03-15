@@ -144,7 +144,7 @@ style = ttk.Style(window)
 window.bind("<F10>", lambda e:toggle_FS())
 window.bind("<Escape>", lambda e:window.destroy())
 # window.call("source", "/home/salman/Desktop/AeroCode/Aero2024/azure.tcl")
-window.call("source", "/Users/labeast021/Desktop/GUI/Aero2024/azure.tcl")
+window.call("source", "/Users/labeast021/Desktop/Kiarash/CSUN_Aero_GUI/azure.tcl")
 window.tk.call("set_theme", current_theme)
 print("Screen Resolution: {}x{}".format(screen_width, screen_height))
 
