@@ -144,7 +144,7 @@ style = ttk.Style(window)
 window.bind("<F10>", lambda e:toggle_FS())
 window.bind("<Escape>", lambda e:window.destroy())
 # window.call("source", "/home/salman/Desktop/AeroCode/Aero2024/azure.tcl")
-window.call("source", "/Users/labeast021/Desktop/Kiarash/CSUN_Aero_GUI/azure.tcl")
+window.call("source", "/Users/labeast021/Desktop/GUI/Aero2024/azure.tcl")
 window.tk.call("set_theme", current_theme)
 print("Screen Resolution: {}x{}".format(screen_width, screen_height))
 
@@ -259,53 +259,20 @@ def launch():
     else:
         log.insert(1.0,"DANGER ! No Mission on PADA to launch\n") 
     
+# ================================= SENDING MISSION TO PADA ======================================================= 
 def sendMissionToPADA(lat, lon):
-    from waypoint_2_mav import waypoint_gen_format
-    from upload_mission import execute_upload
+    from new_WayPoint_Generator import create_waypoints
 
-    global padaReadyToRelease
-
-    def thread_waypoint_gen_format(lat, lon):
-        waypoint_gen_format(lat, lon)
-
-    def thread_execute_upload():
-        execute_upload()
-
-    def check_missions_on_pada(PADA_conn):
-        global padaReadyToRelease
-        # Request the mission count
-        PADA_conn.mav.mission_request_list_send(PADA_conn.target_system, PADA_conn.target_component)
-        try:
-            # Wait for the MISSION_COUNT message with a 5-second timeout
-            message = PADA_conn.recv_match(type='MISSION_COUNT', blocking=True, timeout=5)
-            if message:
-                mission_count = message.count
-                log.insert(1.0, f" #missions on PADA: {mission_count}\n" , "color4")
-                if mission_count > 0:
-                    log.insert(1.0, "Missions are present on the PADA.\n" , "color1")
-                    padaReadyToRelease = True
-                else:
-                    log.insert(1.0, "No missions are loaded on the PADA.\n" , "color3")
-            else:
-                log.insert(1.0, "Failed to receive MISSION_COUNT response from PADA.\n" , "color3")
-        except Exception as e:
-            log.insert(1.0, f"An error occurred while checking missions on PADA: {e}\n" , "color3")
-
-    thread1 = threading.Thread(target=thread_waypoint_gen_format, args=(lat, lon))
+    thread1 = threading.Thread(target=create_waypoints, args=(lat, lon))
     thread1.start()
     thread1.join()
 
-    thread2 = threading.Thread(target=thread_execute_upload)
-    thread2.start()
-    thread2.join()
+    # thread2 = threading.Thread(target=thread_execute_upload)
+    # thread2.start()
+    # thread2.join()
 
     sleep(1)
 
-    # thread3 = threading.Thread(target=check_missions_on_pada, args=(PADA_conn,))
-    # thread3.start()
-    # thread3.join()
-    # PADA_conn = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600) # for macos
-    # PADA_conn.wait_heartbeat(timeout=5)
     print("doneeeeeeeeeee")
 
 def stopDetection():
@@ -492,10 +459,14 @@ def getHeartbeat():
                     # rs.set(f"DAS Runnning | {current_color} ")
                     log.insert(1.0, f"code {servo_msg.servo1_raw} : DAS running with color : {current_color}\n", "color1")
                     DAS_runnning = True
-                    
+
+
                 if any(existing_code == 1440 for existing_code, _ in event_listener) and missionRecieved == False: 
-                    sleep(3)
+                    sleep(2)
                     mav_conn.waypoint_request_list_send()
+                    sleep(1)
+                    
+                    # mav_conn.mission_request_list_send(mav_conn.target_system, mav_conn.target_component)
                     servo_msg_for_mission = mav_conn.recv_match(type='MISSION_COUNT', blocking=True, timeout=5)
 
                     if servo_msg_for_mission is None and triesForMission < 3:
@@ -510,21 +481,51 @@ def getHeartbeat():
                         missionRecieved = True
                         lat = 0.0
                         lon = 0.0
-                        for i in range(servo_msg_for_mission.count):
-                            print("hereee 4 ")
-                            mav_conn.waypoint_request_send(i)
+                        for seq in range(servo_msg_for_mission.count):
+                                                # Request the specific waypoint
+                            mav_conn.waypoint_request_send(seq)
+                            
+                            # Wait for and read the waypoint
                             waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True)
-                            print(waypoint)
-                            # print(f"Waypoint {i + 1}: Latitude={waypoint.x}, Longitude={waypoint.y}, Altitude={waypoint.z}")
-                            if i == servo_msg_for_mission.count - 1:
-                                print("hereee 5 ")
-                                current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
-                                log_text = f"Mission Received coordinates for target {current_color} -> lat: {waypoint.x}, lon: {waypoint.y}\n"
-                                log.insert(1.0, log_text)
-                                lat = waypoint.x
-                                lon = waypoint.y
+                            if waypoint:
+                                print(f"Waypoint {seq}: Lat {waypoint.x}, Lon {waypoint.y}, Alt {waypoint.z}")
+                                print("Full precision:", f"Lat {format(waypoint.x, '.8f')}, Lon {format(waypoint.y, '.8f')}")
+                                lat = waypoint.x  # Latitude
+                                lon = waypoint.y  # Longitude
+                                log.insert(1.0, f"Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
+                                print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
                                 sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
                                 sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+
+
+                        # while triesForMission < 6:
+                        #     # Wait for a MISSION_ITEM message
+                        #     message = mav_conn.recv_match(type='MISSION_ITEM', blocking=True , timeout=2)
+                        #     if message:
+                        #         # Check if this mission item is a landing waypoint
+                        #         if message.command == mavutil.mavlink.MAV_CMD_NAV_LAND:
+                        #             # Extract the coordinates
+                        #             lat = message.x  # Latitude
+                        #             lon = message.y  # Longitude
+                        #             print(f"Landing waypoint coordinates: Latitude = {lat}, Longitude = {lon}")
+                        #             log.insert(1.0, f"Landing waypoint coordinates: Latitude = {lat}, Longitude = {lon}\n", "color1")
+                        #             break  # Exit theit the loop if you only care about the f
+                        #     triesForMission += 1
+                        # if triesForMission == 6:
+                        #     log.insert(1.0, "Failed to receive landing waypoint coordinates\n", "color3")    
+                        # for i in range(servo_msg_for_mission.count):
+                        #     print("hereee 4 ")
+                        #     mav_conn.waypoint_request_send(i)
+                        #     waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True)
+                        #     print(waypoint)
+                        #     # print(f"Waypoint {i + 1}: Latitude={waypoint.x}, Longitude={waypoint.y}, Altitude={waypoint.z}")
+                        #     if i == servo_msg_for_mission.count - 1:
+                        #         print("hereee 5 ")
+                        #         current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
+                        #         log_text = f"Mission Received coordinates for target {current_color} -> lat: {waypoint.x}, lon: {waypoint.y}\n"
+                        #         log.insert(1.0, log_text)
+                        #         lat = waypoint.x
+                        #         lon = waypoint.y
 
         elif mavconn_established == False or mav_conn is None:
             establish_mav_connection(False)
