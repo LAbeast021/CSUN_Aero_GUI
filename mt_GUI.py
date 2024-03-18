@@ -50,7 +50,7 @@ colorPWM = [1750, 1650, 1450, 1550, 1850]
 global detectedValue
 detectedValue = 898
 
-FIELD_ALTITUDE = 704 # in FEET
+FIELD_ALTITUDE = 880 # in FEET
 
 global errorCodes
 errorCodes = [1200 , 1250 , 1950 ] # 1950 = Camera not detected, 1200 = Jetson not responding, 1250 = Jetson not ready
@@ -263,15 +263,28 @@ def launch():
 def sendMissionToPADA(lat, lon):
     from new_WayPoint_Generator import create_waypoints
 
-    thread1 = threading.Thread(target=create_waypoints, args=(lat, lon))
+    thread1 = threading.Thread(target = create_waypoints, args=(lat, lon))
     thread1.start()
     thread1.join()
 
-    # thread2 = threading.Thread(target=thread_execute_upload)
-    # thread2.start()
-    # thread2.join()
-
     sleep(1)
+    try:
+        # Attempt to establish a MAVLink connection
+        PADA_conn = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600) # for macOS
+        heartbeat = PADA_conn.wait_heartbeat(timeout=5)
+        
+        if heartbeat is None:
+            log.insert(1.0, "No heartbeat received. Connection not established to PADA.\n", "color3")
+            # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
+            # print("No heartbeat received. Connection not established.")
+        else:
+            mavconn_established = True
+            log.insert(1.0, "Connection successfully established To PADA!\n", "color1")
+            # print("Connection successfully established!")
+    
+    except Exception as e:
+        log.insert(1.0, f"Failed to establish connection to PADA: {e}\n", "color3")
+    # Handle cases where connection fails for other reasons
 
     print("doneeeeeeeeeee")
 
