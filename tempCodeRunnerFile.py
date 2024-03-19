@@ -1,1 +1,2 @@
-start_system
+
+timelabel.config(text=time)

@@ -32,11 +32,12 @@ class waypointGenerator:
     lat_conversion = 2.745e-6 #Apollo Field
     lon_conversion = 3.3095732e-6 #Apollo Field
 
-    def __init__(self, lat, lon, alt):
+    def __init__(self, lat, lon, alt , direction_code):
         print("waypoint_generator.py ---1--1-1-1-1-1-1-11-1--11-1")
         self.lat = lat
         self.lon = lon
         self.alt = alt
+        self.direction_code = direction_code
 
     # definition that converts ft to meters (might not need in final product)
     def ft_to_m(self, value):
@@ -58,7 +59,10 @@ class waypointGenerator:
 
     # Generate first waypoint:
     def waypoint(self):
-        waypoint = [round(self.lat + (200 * self.lat_conversion), 6), self.lon, self.ft_to_m(self.alt + 50)]
+        if self.direction_code == 0:
+            waypoint = [round(self.lat + (200 * self.lat_conversion), 6), self.lon, self.ft_to_m(self.alt + 50)]
+        else :
+            waypoint = [round(self.lat - (200 * self.lat_conversion), 6), self.lon, self.ft_to_m(self.alt + 50)]
         return waypoint
 
     def originalCoords(self):

@@ -37,7 +37,8 @@ data = {
         'altitude': 0,
         'headingAngle': 0,
         'speed': 0, 
-        'padaSpeed' : 0,   
+        'padaSpeed' : 0,  
+        'signalStrength': 0,
     }
 
 
@@ -260,10 +261,14 @@ def launch():
         log.insert(1.0,"DANGER ! No Mission on PADA to launch\n") 
     
 # ================================= SENDING MISSION TO PADA ======================================================= 
-def sendMissionToPADA(lat, lon):
+def sendMissionToPADA(lat, lon , direction):
     from new_WayPoint_Generator import create_waypoints
 
-    thread1 = threading.Thread(target = create_waypoints, args=(lat, lon))
+    direction_code = 0
+    if direction == 'South -> North': 
+        direction_code = 1
+    
+    thread1 = threading.Thread(target = create_waypoints, args=(lat, lon , direction_code))
     thread1.start()
     thread1.join()
 
@@ -427,6 +432,11 @@ def getHeartbeat():
             # padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
             # data['padaSpeed'] = padaSpeed.airspeed
             # ============================================
+            # signal = mav_conn.recv_match(type = 'RADIO_STATUS', blocking=True , timeout=1)
+            # if signal is not None:
+            #     # data['signalStrength'] = signal.rssi
+            #     print(signal.rssi)
+            # ============================================
             servo_msg = mav_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True)
             if not any(existing_code == servo_msg.servo5_raw for existing_code, _ in event_listener) and servo_msg.servo5_raw != 0:
                 if servo_msg.servo5_raw == 1500 and jetsonReady == False and servo_msg.servo5_raw != 0:
@@ -495,20 +505,23 @@ def getHeartbeat():
                         lat = 0.0
                         lon = 0.0
                         for seq in range(servo_msg_for_mission.count):
-                                                # Request the specific waypoint
-                            mav_conn.waypoint_request_send(seq)
-                            
-                            # Wait for and read the waypoint
-                            waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True)
-                            if waypoint:
-                                print(f"Waypoint {seq}: Lat {waypoint.x}, Lon {waypoint.y}, Alt {waypoint.z}")
-                                print("Full precision:", f"Lat {format(waypoint.x, '.8f')}, Lon {format(waypoint.y, '.8f')}")
-                                lat = waypoint.x  # Latitude
-                                lon = waypoint.y  # Longitude
-                                log.insert(1.0, f"Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
-                                print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
-                                sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
-                                sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+                            while True:                   # Request the specific waypoint
+                                mav_conn.waypoint_request_send(seq)
+                                waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True , timeout=1)
+                                if waypoint:
+                                    print(f"Waypoint {seq}: Lat {waypoint.x}, Lon {waypoint.y}, Alt {waypoint.z}")
+                                    print("Full precision:", f"Lat {format(waypoint.x, '.8f')}, Lon {format(waypoint.y, '.8f')}")
+                                    lat = waypoint.x  # Latitude
+                                    lon = waypoint.y  # Longitude
+                                    log.insert(1.0, f"Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
+                                    print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
+                                    pada_arm = StringVar()
+                                    pada_arm.set("Which Direction?")
+                                    pada_sel = OptionMenu(window, pada_arm, 'North -> South','South -> North')
+                                    pada_sel.place(x=0.28*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
+                                    sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon , pada_arm.get()))
+                                    sendMission.place(x=0.4*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+                                    break
 
 
                         # while triesForMission < 6:
@@ -798,10 +811,10 @@ def creategui():
     global readyToLaunch
     readyToLaunch = False
 
-    pada_arm = StringVar()
-    pada_arm.set("ARM PADA?")
-    pada_sel = OptionMenu(window, pada_arm, 'ARM','NOT ARM')
-    pada_sel.place(x=0.4*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
+    # pada_arm = StringVar()
+    # pada_arm.set("Which Direction?")
+    # pada_sel = OptionMenu(window, pada_arm, 'North -> South','South -> North')
+    # pada_sel.place(x=0.28*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
     # pada_arm.trace('w', arm_pada)   
 
     

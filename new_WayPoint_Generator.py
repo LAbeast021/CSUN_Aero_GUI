@@ -11,7 +11,7 @@ master.wait_heartbeat()
 
 def upload_mission_from_array(waypoints):
     master.waypoint_clear_all_send()  # Clear existing mission
-    sleep(2)  # Give s
+    sleep(2) 
 
     master.waypoint_count_send(len(waypoints))
     for waypoint in waypoints:
@@ -56,8 +56,8 @@ def to_float(precision_output):
 
 
 # Initialize the waypoint generator with the provided coordinates
-def create_waypoints(lat, lon):
-    coordinates = waypointGenerator(lat, lon, 0)
+def create_waypoints(lat, lon , direction_code):
+    coordinates = waypointGenerator(lat, lon, 0 ,direction_code)
 
     # Generate waypoints in arrays
     waypoints = [
