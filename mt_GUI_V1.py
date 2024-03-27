@@ -35,6 +35,7 @@ data = {
         'latitude': 0,
         'longitude': 0,
         'altitude': 0,
+        'GPSaltitude' :0,
         'headingAngle': 0,
         'speed': 0, 
         'padaSpeed' : 0,  
@@ -51,7 +52,7 @@ colorPWM = [1750, 1650, 1450, 1550, 1850]
 global detectedValue
 detectedValue = 898
 
-FIELD_ALTITUDE = 880 # in FEET
+FIELD_ALTITUDE = 695 # in FEET
 
 global errorCodes
 errorCodes = [1200 , 1250 , 1950 ] # 1950 = Camera not detected, 1200 = Jetson not responding, 1250 = Jetson not ready
@@ -267,6 +268,18 @@ def sendMissionToPADA(lat, lon , direction):
     direction_code = 0
     if direction == 'South -> North': 
         direction_code = 1
+    elif direction == 'west -> east':
+        direction_code = 2
+    elif direction == 'east -> west':
+        direction_code = 3
+    elif direction == 'north east -> south west':
+        direction_code = 4
+    elif direction == 'south west -> north east':
+        direction_code = 5
+    elif direction == 'north west -> south east':
+        direction_code = 6
+    elif direction == 'south east -> north west':
+        direction_code = 7
     
     thread1 = threading.Thread(target = create_waypoints, args=(lat, lon , direction_code))
     thread1.start()
@@ -517,7 +530,7 @@ def getHeartbeat():
                                     print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
                                     pada_arm = StringVar()
                                     pada_arm.set("Which Direction?")
-                                    pada_sel = OptionMenu(window, pada_arm, 'North -> South','South -> North')
+                                    pada_sel = OptionMenu(window, pada_arm, 'North -> South','South -> North','west -> east','east -> west','north east -> south west','south west -> north east','north west -> south east','south east -> north west')
                                     pada_sel.place(x=0.28*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
                                     sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon , pada_arm.get()))
                                     sendMission.place(x=0.4*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
