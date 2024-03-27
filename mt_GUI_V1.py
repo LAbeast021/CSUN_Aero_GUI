@@ -438,6 +438,10 @@ def getHeartbeat():
             if vfrHud is not None:
                 data['speed'] = vfrHud.airspeed
             # ============================================
+            GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
+            if GPSRAW is not None:
+                data['GPSaltitude'] = GPSRAW.alt
+            # ============================================
             powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
             if powerStatus is not None:
                 data['powerstatus'] = powerStatus.Vcc / 1000
