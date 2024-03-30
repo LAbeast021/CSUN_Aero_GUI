@@ -5,6 +5,7 @@ from tkinter import ttk
 from tkinter import font
 from time import time , sleep
 import screeninfo
+import math
 
 from datetime import datetime
 
@@ -15,6 +16,8 @@ import multiprocessing
 
 # import serial
 from pymavlink import mavutil
+
+from logSaver import saveLoggs
 # ==================== END OF IMPORTS ==============
 
 global mavconn_established
@@ -41,6 +44,10 @@ data = {
         'padaSpeed' : 0,  
         'signalStrength': 0,
     }
+
+
+global logArray
+logArray = []
 
 
 global triesForMission
@@ -129,7 +136,7 @@ if not os.path.exists(flightdatadir):
 
 # Create the flight data log file
 global current_theme
-current_theme = "dark"
+current_theme = "light"
 # with open(flightdatapath, 'w') as fdr:
 global window
 window = tk.Tk()
@@ -166,7 +173,7 @@ scrollbar = ttk.Scrollbar(window)
 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
 # VERSION
-version = "k.4.0.2"
+version = "K.6.0"
 gui_version = ttk.Label(window, text="Version: " + version, font=('None',10))
 gui_version.place(x=(0.8*(screen_width)),y=(0.01*(screen_height)))
 
@@ -192,12 +199,18 @@ log.place(x=0.64*(screen_width), y=0.53*(screen_height))
 bold_font = font.Font(family='TkDefaultFont', size=10, weight='bold')
 
 log.tag_configure("color1", foreground="green"  , font=bold_font)
-log.tag_configure("color2", foreground="yellow", font=bold_font) 
+log.tag_configure("color2", foreground="orange", font=bold_font) 
 log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
 log.insert(1.0, "Welcome to the CSUN Aeronautics Ground Station Log\n")
 #---------------------------- END OF LOG TEXT BOX  ----------------------------
 # --------------------------- Establishing connection to primary and PADA  . --------------------------
+def logSaverFunction():
+    global log
+    global logArray
+    global event_listener
+    logArray.append(event_listener)
+
 def establish_mav_connection(report):
     global mavconn_established
     global PADAconn_established
@@ -307,10 +320,14 @@ def sendMissionToPADA(lat, lon , direction):
     print("doneeeeeeeeeee")
 
 def stopDetection():
+    global DAS_runnning
+    
+    DAS_runnning = True
     if DAS_runnning == True:
         print(event_listener)
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 1000 , 0 , 0, 0, 0, 0)
         log.insert(1.0, "DAS STOPPED\n")    
+
 
 
 def initialization():
@@ -378,26 +395,12 @@ def initialization():
 
 
 def restartjetson(jetsonRunning):
-    if jetsonRunning == True:
+        global detectedValue
+        detectedValue = 898
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 4 , 1900 , 0 , 0, 0, 0, 0)
-        msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-        sleep(1)
-    elif jetsonRunning == False:
-        mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 4 , 0 , 0 , 0, 0, 0, 0)
-        msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-    
-    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 1 , 0 , 0 , 0, 0, 0, 0)
-    msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 2 , 0 , 0 , 0, 0, 0, 0)
-    msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 0 , 0 , 0, 0, 0, 0)
-    msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 5 , 0 , 0 , 0, 0, 0, 0)
-    msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 8 , 0 , 0 , 0, 0, 0, 0)
-    msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-    
-    initialization()
+        log.insert(1.0, "=============================================\n")
+        sleep(3)
+        initialization()
 
 # --------------------------- ALL THE FUNCTIONALITY OF THE BUTTONS ABOVE , NOTTE THESE ARE SEPERATE FROM THE THREADS . --------------------------
 # ========================================THREADS AND FUNCTIONS THAT WILL REPEAT ARE BELOW ===================================
@@ -429,7 +432,7 @@ def getHeartbeat():
         if mavconn_established == True and mav_conn is not None:
             globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
             if globalPosition is not None:
-                data['altitude'] = ((globalPosition.alt * 3.2808 ) / 1000 ) - FIELD_ALTITUDE #+ 880 #Chnage to airfield alt
+                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 ) #+ 880 #Chnage to airfield alt
                 data['headingAngle'] = globalPosition.hdg / 100
                 data['latitude'] = globalPosition.lat / 1e7
                 data['longitude'] = globalPosition.lon / 1e7
@@ -440,14 +443,22 @@ def getHeartbeat():
             # ============================================
             GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
             if GPSRAW is not None:
-                data['GPSaltitude'] = GPSRAW.alt
+                data['GPSaltitude'] = GPSRAW.alt /1000
             # ============================================
             powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
             if powerStatus is not None:
-                data['powerstatus'] = powerStatus.Vcc / 1000
+                data['powerstatus'] = powerStatus.Vcc  / 1000
             # ============================================
             # padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
             # data['padaSpeed'] = padaSpeed.airspeed
+            # ============================================
+            # ============================================
+            Attitude= mav_conn.recv_match(type = 'ATTITUDE', blocking=True )
+            yaw = Attitude.yaw
+            yaw_degree = math.degrees(yaw)
+            if yaw_degree < 0:
+                yaw_degree += 360
+            # print(yaw_degree)
             # ============================================
             # signal = mav_conn.recv_match(type = 'RADIO_STATUS', blocking=True , timeout=1)
             # if signal is not None:
@@ -455,6 +466,7 @@ def getHeartbeat():
             #     print(signal.rssi)
             # ============================================
             servo_msg = mav_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True)
+            # print(servo_msg)
             if not any(existing_code == servo_msg.servo5_raw for existing_code, _ in event_listener) and servo_msg.servo5_raw != 0:
                 if servo_msg.servo5_raw == 1500 and jetsonReady == False and servo_msg.servo5_raw != 0:
                     event_listener.append((servo_msg.servo5_raw , datetime.now()))
@@ -617,9 +629,17 @@ def creategui():
     altitude.grid(row=0,column=0, sticky="news", padx=0.001*(screen_width))
 
     #ALTTITUDE VAR
-    altvar = ttk.Label(dashboard, text="0", font=('None', 100))
+    altvar = ttk.Label(dashboard, text="0", font=('None', 20))
     altvar.grid(row=1,column=0,sticky="news", padx=0.001*(screen_width))
+# =======================================
+    #ALTITUDE
+    GPSaltitude = ttk.Label(dashboard, text="GPS Altitude", font=('None', 20))
+    GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
 
+    #ALTTITUDE VAR
+    GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 20))
+    GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
+# ===========================================
     #HEADING
     heading = ttk.Label(dashboard, text="Heading", font=('None', 20))
     heading.grid(row=0,column=1, sticky="news", padx=0.001*(screen_width))
@@ -687,7 +707,6 @@ def creategui():
 
 
     #DASHBOARD 3 LAUNCH SATUS CREATION
-
     dashboard3 = ttk.LabelFrame(window)
     dashboard3.columnconfigure(0, weight=1)
     dashboard3.columnconfigure(1, weight=1)
@@ -841,6 +860,8 @@ def creategui():
 
     # ##################################################################################################################################################
 
+    SaveLoggButton = ttk.Button(window, text="Save The Loggs" , command=logSaverFunction)
+    SaveLoggButton.place(x=0.51*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
     # START SYSTEM AESTHETIC DROPBOX MENU  
         
     # sysvar = StringVar()
@@ -862,6 +883,7 @@ def creategui():
         time = raw_TS.strftime("%H:%M:%S %p")
         timelabel.config(text=time)
         # window.after(1000, uptadeTime)
+        GPSaltvar.config(text="{:.1f} ft".format(data['GPSaltitude']))
         altvar.config(text="{:.2f} ft".format(data['altitude']))  #### LETS ADD A UNIT TO THIS ####
         hdgvar.config(text="{:.2f}".format(data['headingAngle']))
         latvar.config(text="{:.10f}".format(data['latitude']))
