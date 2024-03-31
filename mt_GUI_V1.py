@@ -6,6 +6,8 @@ from tkinter import font
 from time import time , sleep
 import screeninfo
 import math
+import sys
+import os
 
 from datetime import datetime
 
@@ -17,6 +19,7 @@ import multiprocessing
 # import serial
 from pymavlink import mavutil
 
+# ============== Functions ==============
 from logSaver import saveLoggs
 # ==================== END OF IMPORTS ==============
 
@@ -33,6 +36,27 @@ global mav_conn
 mav_conn = None
 global PADA_conn
 
+global mav_conn_string
+global pada_conn_string
+global window_call_string
+
+
+if sys.platform == 'linux':
+    mav_conn_string = '/dev/ttyUSB1'
+    pada_conn_string = '/dev/ttyUSB0'
+    window_call_string = (os.getcwd() + '/GS_Multithreading/azure.tcl')
+elif sys.platform == 'win32':
+    mav_conn_string = 'COM17'
+    pada_conn_string = 'COM18'
+    window_call_string = r"C:\Users\randy\Documents\Python\Aero2024\GS_Multithreading\azure.tcl" # this is randy's path 
+    # window_call_string = (os.getcwd() + '\\GS_Multithreading\\azure.tcl')
+elif sys.platform == 'darwin':
+    mav_conn_string = '/dev/tty.usbserial-AK06O4AL'
+    pada_conn_string = '/dev/tty.usbserial-B0016NGB'
+    window_call_string = "/Users/labeast021/Desktop/GUI/Aero2024/azure.tcl"
+else:
+    print("ERROR: Unrecognized OS")
+
 #####---------------------- GLOBAL VARIABLES ######################################################################
 data = {
         'latitude': 0,
@@ -48,6 +72,9 @@ data = {
 
 global logArray
 logArray = []
+
+global GPSLogger
+GPSLogger = []
 
 
 global triesForMission
@@ -68,48 +95,33 @@ global errorRecieved
 errorRecieved = []
 
 global event_listener
+event_listener = []
+event_listener.append((1, datetime.now().strftime("%Y %m %d %H:%M:%S")))
 
 global jetsonReady
 # jetsonReady = False
-
 global programRunning
 # programRunning = False
-
 global colorRecieved
 # colorRecieved = False
-
 global colorSent
 # colorSent = False
-
 global DAS_runnning
 # DAS_runnning = False
-
 global DAS_stopped
 # DAS_stopped = False
-
 global missionRecieved
 # missionRecieved = False
-
 global missionSent
 # missionSent = False
-
 global errorHandled 
-# errorHandled = False 
-
+# errorHandled = Fa
 global padaReadyToRelease
 padaReadyToRelease = True
-
-
 global start_time
-
-
 global statusRecieved
-
 global colorWaitRecieved 
-
 global current_color
-
-
 global sysvar
 global sysstart
 global sendMission
@@ -125,7 +137,6 @@ screen_geo = str(screen_width) + "x" + str(screen_height)
 utc = utc
 pst = timezone('US/Pacific')
 raw_TS = datetime.now(pst)
-import os
 
 dateandtime = raw_TS.strftime("%b_%d_%Y_%H_%M_%S")
 
@@ -153,7 +164,7 @@ style = ttk.Style(window)
 window.bind("<F10>", lambda e:toggle_FS())
 window.bind("<Escape>", lambda e:window.destroy())
 # window.call("source", "/home/salman/Desktop/AeroCode/Aero2024/azure.tcl")
-window.call("source", "/Users/labeast021/Desktop/GUI/Aero2024/azure.tcl")
+window.call("source", window_call_string)
 window.tk.call("set_theme", current_theme)
 print("Screen Resolution: {}x{}".format(screen_width, screen_height))
 
@@ -173,7 +184,7 @@ scrollbar = ttk.Scrollbar(window)
 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
 # VERSION
-version = "K.6.0"
+version = "K.7.0"
 gui_version = ttk.Label(window, text="Version: " + version, font=('None',10))
 gui_version.place(x=(0.8*(screen_width)),y=(0.01*(screen_height)))
 
@@ -202,23 +213,31 @@ log.tag_configure("color1", foreground="green"  , font=bold_font)
 log.tag_configure("color2", foreground="orange", font=bold_font) 
 log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
+log.tag_configure("font1", font=("TkDefaultFont", int(0.025*(screen_height))))
+# log.tag_add("font1", "1.0", "end")
+
 log.insert(1.0, "Welcome to the CSUN Aeronautics Ground Station Log\n")
 #---------------------------- END OF LOG TEXT BOX  ----------------------------
-# --------------------------- Establishing connection to primary and PADA  . --------------------------
+
+#---------------------------- logging the data   ----------------------------
 def logSaverFunction():
     global log
     global logArray
     global event_listener
-    logArray.append(event_listener)
+    global GPSLogger
 
+    logArray.append(event_listener)
+    saveLoggs(GPSLogger , event_listener)
+
+# --------------------------- Establishing connection to primary and PADA  . --------------------------
 def establish_mav_connection(report):
     global mavconn_established
-    global PADAconn_established
     global mav_conn
-    global PADA_conn
+    global mav_conn_string
     try:
         # Attempt to establish a MAVLink connection
-        mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
+        # mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
+        mav_conn = mavutil.mavlink_connection(mav_conn_string, baud=57600)
         heartbeat = mav_conn.wait_heartbeat(timeout=5)
         
         if heartbeat is None:
@@ -228,6 +247,7 @@ def establish_mav_connection(report):
             # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
             # print("No heartbeat received. Connection not established.")
         else:
+            event_listener.append((5, datetime.now().strftime("%Y %m %d %H:%M:%S")))
             mavconn_established = True
             log.insert(1.0, "Connection successfully established To Orange Cube!\n", "color1")
             # print("Connection successfully established!")
@@ -235,6 +255,7 @@ def establish_mav_connection(report):
     except Exception as e:
         if report:
             log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
+            
         # Handle cases where connection fails for other reasons
         # log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
         pass
@@ -244,16 +265,21 @@ establish_mav_connection(True)
 
 def start_system():
     global programRunning
+    global event_listener
+
     if programRunning == False:
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 2, 1200, 0, 0 , 0, 0, 0)
         programRunning = True
+        event_listener.append((3, datetime.now().strftime("%Y %m %d %H:%M:%S")))
 
 launchstatvar = ttk.Label(window, text="", font=('None', 20))
 launchstatvar.pack()
 
 def launch():
+
     global padaReadyToRelease
     padaReadyToRelease = True
+
     if padaReadyToRelease == True:
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
         # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
@@ -270,12 +296,13 @@ def launch():
             mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
             mode_id)
         launchstatvar.config(text=f"PADA Launched at {data['altitude']}\n")
-        log.insert(1.0, f"PADA Launched at {data['altitude']} with the speed of {data['padaSpeed']}\n")
+        log.insert(1.0, f"PADA Launched at {data['altitude']}\n"  , "font1")
     else:
         log.insert(1.0,"DANGER ! No Mission on PADA to launch\n") 
     
 # ================================= SENDING MISSION TO PADA ======================================================= 
 def sendMissionToPADA(lat, lon , direction):
+    global pada_conn_string
     from new_WayPoint_Generator import create_waypoints
 
     direction_code = 0
@@ -301,7 +328,7 @@ def sendMissionToPADA(lat, lon , direction):
     sleep(1)
     try:
         # Attempt to establish a MAVLink connection
-        PADA_conn = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600) # for macOS
+        PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=57600) # for macOS
         heartbeat = PADA_conn.wait_heartbeat(timeout=5)
         
         if heartbeat is None:
@@ -331,8 +358,8 @@ def stopDetection():
 
 
 def initialization():
-    global detectedValue
-    detectedValue = 898
+    # global detectedValue
+    # detectedValue = 898
     global reportMavConn
     reportMavConn = False
     global mavconn_established
@@ -362,7 +389,7 @@ def initialization():
     errorHandled = False 
     global current_color
     # global sendMission
-    global event_listener
+    # global event_listener
     global start_time
     start_time = time
     
@@ -381,6 +408,9 @@ def initialization():
     # sysstart.place_forget()
     # sendMission.place_forget()
     event_listener = []
+    GPSLogger = []
+    
+
     
     global sysvar
     global SendMission
@@ -397,8 +427,14 @@ def initialization():
 def restartjetson(jetsonRunning):
         global detectedValue
         detectedValue = 898
+        global event_listener
+        global GPSLogger
+
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 4 , 1900 , 0 , 0, 0, 0, 0)
         log.insert(1.0, "=============================================\n")
+        event_listener = []
+        GPSLogger = []
+        event_listener.append((2, datetime.now().strftime("%Y %m %d %H:%M:%S")))
         sleep(3)
         initialization()
 
@@ -427,8 +463,10 @@ def getHeartbeat():
     global errorHandled
     global triesForMission
     global detectedValue
+    global GPSLogger
 
     while True:
+        GPSTuple = ()
         if mavconn_established == True and mav_conn is not None:
             globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
             if globalPosition is not None:
@@ -453,11 +491,11 @@ def getHeartbeat():
             # data['padaSpeed'] = padaSpeed.airspeed
             # ============================================
             # ============================================
-            Attitude= mav_conn.recv_match(type = 'ATTITUDE', blocking=True )
-            yaw = Attitude.yaw
-            yaw_degree = math.degrees(yaw)
-            if yaw_degree < 0:
-                yaw_degree += 360
+            # Attitude= mav_conn.recv_match(type = 'ATTITUDE', blocking=True )
+            # yaw = Attitude.yaw
+            # yaw_degree = math.degrees(yaw)
+            # if yaw_degree < 0:
+            #     yaw_degree += 360
             # print(yaw_degree)
             # ============================================
             # signal = mav_conn.recv_match(type = 'RADIO_STATUS', blocking=True , timeout=1)
@@ -465,11 +503,15 @@ def getHeartbeat():
             #     # data['signalStrength'] = signal.rssi
             #     print(signal.rssi)
             # ============================================
+                
+            GPSTuple = (data['latitude'], data['longitude'], data['altitude'], data['headingAngle'])
+            GPSLogger.append(GPSTuple)
+
             servo_msg = mav_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True)
             # print(servo_msg)
             if not any(existing_code == servo_msg.servo5_raw for existing_code, _ in event_listener) and servo_msg.servo5_raw != 0:
                 if servo_msg.servo5_raw == 1500 and jetsonReady == False and servo_msg.servo5_raw != 0:
-                    event_listener.append((servo_msg.servo5_raw , datetime.now()))
+                    event_listener.append((servo_msg.servo5_raw , datetime.now().strftime("%Y %m %d %H:%M:%S")))
                     jetsonReady = True
                     sysvar.set("Jetson Ready \u2713")  # \u2713 is the unicode for a check mark symbol
                     # sysstart.pack() 
@@ -479,7 +521,9 @@ def getHeartbeat():
 
             
             if not any(existing_code == servo_msg.servo1_raw for existing_code, _ in event_listener) and servo_msg.servo1_raw != 0:
-                event_listener.append((servo_msg.servo1_raw , datetime.now()))
+
+                event_listener.append((servo_msg.servo1_raw , datetime.now().strftime("%Y %m %d %H:%M:%S")))
+
                 if any(existing_code == servo_msg.servo1_raw for existing_code in errorCodes) :
                     if servo_msg.servo1_raw not in errorRecieved:
                         errorHandled = True if errorHandled == False else ()
@@ -552,36 +596,6 @@ def getHeartbeat():
                                     sendMission.place(x=0.4*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
                                     break
 
-
-                        # while triesForMission < 6:
-                        #     # Wait for a MISSION_ITEM message
-                        #     message = mav_conn.recv_match(type='MISSION_ITEM', blocking=True , timeout=2)
-                        #     if message:
-                        #         # Check if this mission item is a landing waypoint
-                        #         if message.command == mavutil.mavlink.MAV_CMD_NAV_LAND:
-                        #             # Extract the coordinates
-                        #             lat = message.x  # Latitude
-                        #             lon = message.y  # Longitude
-                        #             print(f"Landing waypoint coordinates: Latitude = {lat}, Longitude = {lon}")
-                        #             log.insert(1.0, f"Landing waypoint coordinates: Latitude = {lat}, Longitude = {lon}\n", "color1")
-                        #             break  # Exit theit the loop if you only care about the f
-                        #     triesForMission += 1
-                        # if triesForMission == 6:
-                        #     log.insert(1.0, "Failed to receive landing waypoint coordinates\n", "color3")    
-                        # for i in range(servo_msg_for_mission.count):
-                        #     print("hereee 4 ")
-                        #     mav_conn.waypoint_request_send(i)
-                        #     waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True)
-                        #     print(waypoint)
-                        #     # print(f"Waypoint {i + 1}: Latitude={waypoint.x}, Longitude={waypoint.y}, Altitude={waypoint.z}")
-                        #     if i == servo_msg_for_mission.count - 1:
-                        #         print("hereee 5 ")
-                        #         current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
-                        #         log_text = f"Mission Received coordinates for target {current_color} -> lat: {waypoint.x}, lon: {waypoint.y}\n"
-                        #         log.insert(1.0, log_text)
-                        #         lat = waypoint.x
-                        #         lon = waypoint.y
-
         elif mavconn_established == False or mav_conn is None:
             establish_mav_connection(False)
         sleep(0.5)
@@ -629,7 +643,7 @@ def creategui():
     altitude.grid(row=0,column=0, sticky="news", padx=0.001*(screen_width))
 
     #ALTTITUDE VAR
-    altvar = ttk.Label(dashboard, text="0", font=('None', 20))
+    altvar = ttk.Label(dashboard, text="0", font=('None', 90))
     altvar.grid(row=1,column=0,sticky="news", padx=0.001*(screen_width))
 # =======================================
     #ALTITUDE
@@ -637,7 +651,7 @@ def creategui():
     GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
 
     #ALTTITUDE VAR
-    GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 20))
+    GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 90))
     GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
 # ===========================================
     #HEADING
@@ -645,7 +659,7 @@ def creategui():
     heading.grid(row=0,column=1, sticky="news", padx=0.001*(screen_width))
 
     #HEADING VAR
-    hdgvar = ttk.Label(dashboard, text="0", font=('None', 20))
+    hdgvar = ttk.Label(dashboard, text="0", font=('None', 90))
     hdgvar.grid(row=1,column=1,sticky="news")
 
     #AIRSPEED
@@ -653,7 +667,7 @@ def creategui():
     airspeed.grid(row=0,column=2, sticky="news")
 
     #AIRSPEED VAR
-    spdvar = ttk.Label(dashboard, text="0", font=('None', 20))
+    spdvar = ttk.Label(dashboard, text="0", font=('None', 90))
     spdvar.grid(row=1,column=2,sticky="news")
 
 
@@ -684,23 +698,23 @@ def creategui():
     longitude = ttk.Label(dashboard2line, text="Longitude", font=('None', 20))
     longitude.grid(row=0,column=1, sticky="news")
 
-    #POWER STATUS
-    powerstatus = ttk.Label(dashboard2line, text="Voltage Status", font=('None', 20))
-    powerstatus.grid(row=0,column=2, sticky="news",)
+    # #POWER STATUS
+    # powerstatus = ttk.Label(dashboard2line, text="Voltage Status", font=('None', 20))
+    # powerstatus.grid(row=0,column=2, sticky="news",)
 
     #INITIAL DATA VAR CREATION, DEFAULT IS 0
 
     #LATITUDE VAR
-    latvar = ttk.Label(dashboard2line, text="0", font=('None', 20))
+    latvar = ttk.Label(dashboard2line, text="0", font=('None', 50))
     latvar.grid(row=1,column=0,sticky="news", padx=0.0009*(screen_width))
 
     #LONGITUDE VAR
-    longvar = ttk.Label(dashboard2line, text="0", font=('None', 20))
+    longvar = ttk.Label(dashboard2line, text="0", font=('None', 50))
     longvar.grid(row=1,column=1,sticky="news")
 
     #POWER STATUS VAR
-    pwrvar = ttk.Label(dashboard2line, text="0", font=('None', 20))
-    pwrvar.grid(row=1,column=2,sticky="news")
+    # pwrvar = ttk.Label(dashboard2line, text="0", font=('None', 50))
+    # pwrvar.grid(row=1,column=2,sticky="news")
 
     #PACK TO DISPLAY
     dashboard2line.pack(fill='x')
@@ -787,7 +801,7 @@ def creategui():
 
     # jetsonreset = ttk.Button(window, text="Reset Jetson", command= restartjetson) 
     jetsonreset = ttk.Button(window, text="Reset Jetson", command=lambda: restartjetson(DAS_runnning)) 
-    jetsonreset.place(x=0.01*(screen_width), y=0.8*(screen_height),height=0.06*(screen_height), width=0.1*(screen_width))
+    jetsonreset.place(x=0.12*(screen_width), y=0.8*(screen_height),height=0.06*(screen_height), width=0.1*(screen_width))
     
     # #################################################################################################################################################
     global sysstart
@@ -876,6 +890,8 @@ def creategui():
 # --------------------------------------------------------------------------------------------------------------
 
     initialization()
+    # global event_listener
+    # event_listener.append((1, datetime.now().strftime("%Y %m %d %H:%M:%S")))
 
 # --------------------------------------------------------------------------------------------
     def updateDashInfoFunction():
@@ -926,3 +942,32 @@ creategui()
                         
                         # sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon))
                         # sendMission.place(x=0.12*(screen_width), y=0.8*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
+# ========================================================================================================================================================================
+                        # while triesForMission < 6:
+                        #     # Wait for a MISSION_ITEM message
+                        #     message = mav_conn.recv_match(type='MISSION_ITEM', blocking=True , timeout=2)
+                        #     if message:
+                        #         # Check if this mission item is a landing waypoint
+                        #         if message.command == mavutil.mavlink.MAV_CMD_NAV_LAND:
+                        #             # Extract the coordinates
+                        #             lat = message.x  # Latitude
+                        #             lon = message.y  # Longitude
+                        #             print(f"Landing waypoint coordinates: Latitude = {lat}, Longitude = {lon}")
+                        #             log.insert(1.0, f"Landing waypoint coordinates: Latitude = {lat}, Longitude = {lon}\n", "color1")
+                        #             break  # Exit theit the loop if you only care about the f
+                        #     triesForMission += 1
+                        # if triesForMission == 6:
+                        #     log.insert(1.0, "Failed to receive landing waypoint coordinates\n", "color3")    
+                        # for i in range(servo_msg_for_mission.count):
+                        #     print("hereee 4 ")
+                        #     mav_conn.waypoint_request_send(i)
+                        #     waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True)
+                        #     print(waypoint)
+                        #     # print(f"Waypoint {i + 1}: Latitude={waypoint.x}, Longitude={waypoint.y}, Altitude={waypoint.z}")
+                        #     if i == servo_msg_for_mission.count - 1:
+                        #         print("hereee 5 ")
+                        #         current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
+                        #         log_text = f"Mission Received coordinates for target {current_color} -> lat: {waypoint.x}, lon: {waypoint.y}\n"
+                        #         log.insert(1.0, log_text)
+                        #         lat = waypoint.x
+                        #         lon = waypoint.y
