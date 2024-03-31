@@ -199,10 +199,8 @@ raw_TS = datetime.now(pst)
 date = raw_TS.strftime("%b %d %Y")
 time = raw_TS.strftime("%H:%M:%S %p")
 # formattime = raw_TS.strftime("%m-%d-%Y")
-
 datelabel.config(text=date)
 timelabel.config(text=time)
-
 
 #---------------------------- LOG TEXT BOX CREATION ----------------------------
 log = Text(window, height=int(0.025*(screen_height)), width=int(0.05*(screen_width)),xscrollcommand=True,yscrollcommand=True,state='normal')
@@ -618,7 +616,7 @@ def creategui():
                 creategui()
         pass
 
-    menu = ttk.Menubutton(window, text="Ima mutha fukin menu")
+    menu = ttk.Menubutton(window, text="Utility Menu")
     menu.place(x=(0.01*(screen_width)), y=(0.01*(screen_height)))
     settings_menu = tk.Menu(menu, tearoff=False)
     menu['menu'] = settings_menu
