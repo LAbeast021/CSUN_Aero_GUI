@@ -1,0 +1,9 @@
+{
+    "name": "csun-aero-gui",
+    "description": "GUI For CSUN Aero",
+    "dependencies": {
+        "pymavlink": "^2.4.0",
+        "tkinter": "^8.6.0",
+        "matplotlib": "^3.3.0"
+    }
+}

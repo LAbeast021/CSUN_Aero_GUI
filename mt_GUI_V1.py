@@ -1,24 +1,18 @@
 # =================== IMPORTS ===================
+import math
+import sys
+import os
 import tkinter as tk
 from tkinter import *
 from tkinter import ttk
 from tkinter import font
 from time import time , sleep
 import screeninfo
-import math
-import sys
-import os
-
 from datetime import datetime
-
 from pytz import timezone, utc
-
 import threading
 import multiprocessing
-
-# import serial
 from pymavlink import mavutil
-
 # ============== Functions ==============
 from logSaver import saveLoggs
 # ==================== END OF IMPORTS ==============
@@ -211,7 +205,7 @@ log.tag_configure("color1", foreground="green"  , font=bold_font)
 log.tag_configure("color2", foreground="orange", font=bold_font) 
 log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
-log.tag_configure("font1", font=("TkDefaultFont", int(0.025*(screen_height))))
+log.tag_configure("font1", font=("TkDefaultFont", int(0.035*(screen_height))))
 # log.tag_add("font1", "1.0", "end")
 
 log.insert(1.0, "Welcome to the CSUN Aeronautics Ground Station Log\n")
@@ -228,6 +222,17 @@ def logSaverFunction():
     saveLoggs(GPSLogger , event_listener)
 
 # --------------------------- Establishing connection to primary and PADA  . --------------------------
+def request_message_interval(message_id, frequency_hz):
+    global mav_conn
+
+    mav_conn.mav.command_long_send(
+    mav_conn.target_system, mav_conn.target_component,
+    mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0,
+    message_id, 1000000 // frequency_hz, 0, 0, 0, 0, 0)
+    
+    return
+
+
 def establish_mav_connection(report):
     global mavconn_established
     global mav_conn
@@ -235,7 +240,7 @@ def establish_mav_connection(report):
     try:
         # Attempt to establish a MAVLink connection
         # mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
-        mav_conn = mavutil.mavlink_connection(mav_conn_string, baud=57600)
+        mav_conn = mavutil.mavlink_connection(mav_conn_string, baud=115200)
         heartbeat = mav_conn.wait_heartbeat(timeout=5)
         
         if heartbeat is None:
@@ -247,6 +252,10 @@ def establish_mav_connection(report):
         else:
             event_listener.append((5, datetime.now().strftime("%Y %m %d %H:%M:%S")))
             mavconn_established = True
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT, 10)  # Every 1 second for raw GPS data     
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 10)  # Every 1 second for raw GPS data 
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE, 10)  # Every 1 second for raw GPS data 
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 10)  # Every 1 second for raw GPS data
             log.insert(1.0, "Connection successfully established To Orange Cube!\n", "color1")
             # print("Connection successfully established!")
         
@@ -278,8 +287,11 @@ def launch():
     global padaReadyToRelease
     padaReadyToRelease = True
 
+    global PADA_conn
+
     if padaReadyToRelease == True:
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
+        log.insert(1.0, f"PADA Launched at {data['altitude']}\n"  , "font1")
         # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
         # print(msg) 
         sleep(1.5)
@@ -294,13 +306,14 @@ def launch():
             mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
             mode_id)
         launchstatvar.config(text=f"PADA Launched at {data['altitude']}\n")
-        log.insert(1.0, f"PADA Launched at {data['altitude']}\n"  , "font1")
     else:
         log.insert(1.0,"DANGER ! No Mission on PADA to launch\n") 
     
 # ================================= SENDING MISSION TO PADA ======================================================= 
 def sendMissionToPADA(lat, lon , direction):
     global pada_conn_string
+    global PADA_conn
+    
     from new_WayPoint_Generator import create_waypoints
 
     direction_code = 0
@@ -430,10 +443,10 @@ def restartjetson(jetsonRunning):
 
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 4 , 1900 , 0 , 0, 0, 0, 0)
         log.insert(1.0, "=============================================\n")
+        sleep(5)
         event_listener = []
         GPSLogger = []
         event_listener.append((2, datetime.now().strftime("%Y %m %d %H:%M:%S")))
-        sleep(3)
         initialization()
 
 # --------------------------- ALL THE FUNCTIONALITY OF THE BUTTONS ABOVE , NOTTE THESE ARE SEPERATE FROM THE THREADS . --------------------------
@@ -481,9 +494,9 @@ def getHeartbeat():
             if GPSRAW is not None:
                 data['GPSaltitude'] = GPSRAW.alt /1000
             # ============================================
-            powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
-            if powerStatus is not None:
-                data['powerstatus'] = powerStatus.Vcc  / 1000
+            # powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
+            # if powerStatus is not None:
+            #     data['powerstatus'] = powerStatus.Vcc  / 1000
             # ============================================
             # padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
             # data['padaSpeed'] = padaSpeed.airspeed
@@ -624,7 +637,7 @@ def creategui():
     # Add options to the settings menu
     settings_menu.add_command(label="Settings", command=lambda: change_screen("Settin"))
     settings_menu.add_command(label="I DO NOTHING", command=lambda: change_screen(""))
-    settings_menu.add_command(label="I CHANGE THEMES RANDY", command=lambda: change_screen("change_theme"))
+    settings_menu.add_command(label="I CHANGE THEMES", command=lambda: change_screen("change_theme"))
     
     #date_var = StringVar()
 
@@ -645,12 +658,12 @@ def creategui():
     altvar.grid(row=1,column=0,sticky="news", padx=0.001*(screen_width))
 # =======================================
     #ALTITUDE
-    GPSaltitude = ttk.Label(dashboard, text="GPS Altitude", font=('None', 20))
-    GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
+    # GPSaltitude = ttk.Label(dashboard, text="GPS Altitude", font=('None', 20))
+    # GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
 
-    #ALTTITUDE VAR
-    GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 90))
-    GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
+    # #ALTTITUDE VAR
+    # GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 90))
+    # GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
 # ===========================================
     #HEADING
     heading = ttk.Label(dashboard, text="Heading", font=('None', 20))
@@ -897,7 +910,7 @@ def creategui():
         time = raw_TS.strftime("%H:%M:%S %p")
         timelabel.config(text=time)
         # window.after(1000, uptadeTime)
-        GPSaltvar.config(text="{:.1f} ft".format(data['GPSaltitude']))
+        # GPSaltvar.config(text="{:.1f} ft".format(data['GPSaltitude']))
         altvar.config(text="{:.2f} ft".format(data['altitude']))  #### LETS ADD A UNIT TO THIS ####
         hdgvar.config(text="{:.2f}".format(data['headingAngle']))
         latvar.config(text="{:.10f}".format(data['latitude']))
