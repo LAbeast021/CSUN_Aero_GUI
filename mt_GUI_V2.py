@@ -13,10 +13,12 @@ from pytz import timezone, utc
 import threading
 import multiprocessing
 from pymavlink import mavutil
+from multiprocessing import Process
 # ============== Functions ==============
 from logSaver import saveLoggs
 # ==================== END OF IMPORTS ==============
-
+# ==================== GLOBAL VARIABLES ==============
+print("beggining of the code")
 global mavconn_established
 mavconn_established = False
 
@@ -28,21 +30,22 @@ reportMavConn = True
 
 global mav_conn
 mav_conn = None
+
 global PADA_conn
+PADA_conn = None
 
 global mav_conn_string
 global pada_conn_string
 global window_call_string
 
-
 if sys.platform == 'linux':
     mav_conn_string = '/dev/ttyUSB1'
     pada_conn_string = '/dev/ttyUSB0'
-    window_call_string = (os.getcwd() + '/GS_Multithreading/azure.tcl')
+    window_call_string = ('./azure.tcl')
 elif sys.platform == 'win32':
     mav_conn_string = 'COM17'
     pada_conn_string = 'COM18'
-    window_call_string = r"C:\Users\randy\Documents\Python\Aero2024\GS_Multithreading\azure.tcl" # this is randy's path 
+    window_call_string = r"./azure.tcl" # this is randy's path 
     # window_call_string = (os.getcwd() + '\\GS_Multithreading\\azure.tcl')
 elif sys.platform == 'darwin':
     mav_conn_string = '/dev/tty.usbserial-AK06O4AL'
@@ -63,6 +66,11 @@ data = {
         'signalStrength': 0,
     }
 
+global sendPADALat
+global sendPADALon
+
+sendPADALat = 34.878787878
+sendPADALon =-118.8787878787787
 
 global logArray
 logArray = []
@@ -222,16 +230,21 @@ def logSaverFunction():
     saveLoggs(GPSLogger , event_listener)
 
 # --------------------------- Establishing connection to primary and PADA  . --------------------------
-def request_message_interval(message_id, frequency_hz):
+def request_message_interval(message_id, frequency_hz , device):
     global mav_conn
+    global PADA_conn
+    if device == 0:
+        mav_conn.mav.command_long_send(
+        mav_conn.target_system, mav_conn.target_component,
+        mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0,
+        message_id, 1000000 // frequency_hz, 0, 0, 0, 0, 0)
+    else:
+        PADA_conn.mav.command_long_send(
+        PADA_conn.target_system, PADA_conn.target_component,
+        mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0,
+        message_id, 1000000 // frequency_hz, 0, 0, 0, 0, 0)
 
-    mav_conn.mav.command_long_send(
-    mav_conn.target_system, mav_conn.target_component,
-    mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0,
-    message_id, 1000000 // frequency_hz, 0, 0, 0, 0, 0)
-    
     return
-
 
 def establish_mav_connection(report):
     global mavconn_established
@@ -246,34 +259,69 @@ def establish_mav_connection(report):
         if heartbeat is None:
             mavconn_established = False
             if report:
-                log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
+                log.insert(1.0, "No heartbeat received. Connection not established to Orange Cube.\n", "color3")
             # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
             # print("No heartbeat received. Connection not established.")
         else:
             event_listener.append((5, datetime.now().strftime("%Y %m %d %H:%M:%S")))
             mavconn_established = True
-            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT, 10)  # Every 1 second for raw GPS data     
-            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 10)  # Every 1 second for raw GPS data 
-            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE, 10)  # Every 1 second for raw GPS data 
-            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 10)  # Every 1 second for raw GPS data
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT, 10 , 0)  # Every 1 second for raw GPS data     
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 10 , 0)  # Every 1 second for raw GPS data 
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE, 10 , 0)  # Every 1 second for raw GPS data 
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 10 , 0)  # Every 1 second for raw GPS data
             log.insert(1.0, "Connection successfully established To Orange Cube!\n", "color1")
             # print("Connection successfully established!")
         
     except Exception as e:
         if report:
-            log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
+            log.insert(1.0, f"Failed to establish connection to orange cube: {e}\n", "color3")
             
         # Handle cases where connection fails for other reasons
         # log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
         pass
 
 establish_mav_connection(True)
+
+def establish_PADA_connection(report):
+    global PADAconn_established
+    global PADA_conn
+    global pada_conn_string
+
+    try:
+        # Attempt to establish a MAVLink connection
+        # mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
+        PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=57600)
+        heartbeat = PADA_conn.wait_heartbeat(timeout=5)
+        
+        if heartbeat is None:
+            PADAconn_established = False
+            if report:
+                log.insert(1.0, "No heartbeat received. Connection not established to PADA.\n", "color3")
+            # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
+            # print("No heartbeat received. Connection not established.")
+        else:
+            event_listener.append((9, datetime.now().strftime("%Y %m %d %H:%M:%S")))
+            PADAconn_established = True
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_VFR_HUD, 10 , 1)  # Every 1 second for raw GPS data     
+            log.insert(1.0, "Connection successfully established To PADA!\n", "color1")
+            # print("Connection successfully established!")
+        
+    except Exception as e:
+        if report:
+            log.insert(1.0, f"Failed to establish connection to PADA: {e}\n", "color3")
+            
+        # Handle cases where connection fails for other reasons
+        # log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
+        pass
+
+establish_PADA_connection(True)
 # --------------------------- ALL THE FUNCTIONALITY OF THE BUTTONS DOWN BELOW , NOTTE THESE ARE SEPERATE FROM THE THREADS . --------------------------
 
 def start_system():
     global programRunning
     global event_listener
 
+    programRunning == False
     if programRunning == False:
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 2, 1200, 0, 0 , 0, 0, 0)
         programRunning = True
@@ -311,8 +359,12 @@ def launch():
     
 # ================================= SENDING MISSION TO PADA ======================================================= 
 def sendMissionToPADA(lat, lon , direction):
+    print("in send mission 1 ")
     global pada_conn_string
     global PADA_conn
+    global PADAconn_established
+    global mav_conn
+    global mav_conn_string
     
     from new_WayPoint_Generator import create_waypoints
 
@@ -332,6 +384,10 @@ def sendMissionToPADA(lat, lon , direction):
     elif direction == 'south east -> north west':
         direction_code = 7
     
+    PADA_conn.close()
+    PADA_conn = None
+    PADAconn_established = False
+
     thread1 = threading.Thread(target = create_waypoints, args=(lat, lon , direction_code))
     thread1.start()
     thread1.join()
@@ -345,17 +401,17 @@ def sendMissionToPADA(lat, lon , direction):
         if heartbeat is None:
             log.insert(1.0, "No heartbeat received. Connection not established to PADA.\n", "color3")
             # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
-            # print("No heartbeat received. Connection not established.")
+            print("No heartbeat received. Connection not established TO PADA.")
         else:
-            mavconn_established = True
+            PADAconn_established = True
             log.insert(1.0, "Connection successfully established To PADA!\n", "color1")
-            # print("Connection successfully established!")
+            print("Connection successfully established! to PADA")
     
     except Exception as e:
         log.insert(1.0, f"Failed to establish connection to PADA: {e}\n", "color3")
     # Handle cases where connection fails for other reasons
 
-    print("doneeeeeeeeeee")
+    log.insert(1.0, "Mission Sent To PADA !\n", "color1")
 
 def stopDetection():
     global DAS_runnning
@@ -364,9 +420,8 @@ def stopDetection():
     if DAS_runnning == True:
         print(event_listener)
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 1000 , 0 , 0, 0, 0, 0)
+        sleep(1)
         log.insert(1.0, "DAS STOPPED\n")    
-
-
 
 def initialization():
     # global detectedValue
@@ -418,11 +473,9 @@ def initialization():
     # sysstart = ttk.Button()
     # sysstart.place_forget()
     # sendMission.place_forget()
-    event_listener = []
-    GPSLogger = []
-    
+    # event_listener = []
+    # GPSLogger = []
 
-    
     global sysvar
     global SendMission
     sysvar = StringVar()
@@ -440,13 +493,16 @@ def restartjetson(jetsonRunning):
         detectedValue = 898
         global event_listener
         global GPSLogger
+        global triesForMission
 
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 4 , 1900 , 0 , 0, 0, 0, 0)
         log.insert(1.0, "=============================================\n")
         sleep(5)
+        triesForMission = 0
         event_listener = []
         GPSLogger = []
         event_listener.append((2, datetime.now().strftime("%Y %m %d %H:%M:%S")))
+
         initialization()
 
 # --------------------------- ALL THE FUNCTIONALITY OF THE BUTTONS ABOVE , NOTTE THESE ARE SEPERATE FROM THE THREADS . --------------------------
@@ -475,31 +531,43 @@ def getHeartbeat():
     global triesForMission
     global detectedValue
     global GPSLogger
+    global PADAconn_established
+    global PADA_conn
+
+    global sendPADALat
+    global sendPADALon
 
     while True:
         GPSTuple = ()
+        if PADAconn_established == False or PADA_conn == None:
+            establish_PADA_connection(False)
+
         if mavconn_established == True and mav_conn is not None:
             globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
             if globalPosition is not None:
-                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 ) #+ 880 #Chnage to airfield alt
+                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 ) #Chnage to airfield alt
                 data['headingAngle'] = globalPosition.hdg / 100
                 data['latitude'] = globalPosition.lat / 1e7
                 data['longitude'] = globalPosition.lon / 1e7
             # ============================================
-            vfrHud = mav_conn.recv_match(type = 'VFR_HUD', blocking=True)
-            if vfrHud is not None:
-                data['speed'] = vfrHud.airspeed
+            # vfrHud = mav_conn.recv_match(type = 'VFR_HUD', blocking=True)
+            # if vfrHud is not None:
+            #     data['speed'] = vfrHud.airspeed
             # ============================================
             GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
             if GPSRAW is not None:
-                data['GPSaltitude'] = GPSRAW.alt /1000
+                data['GPSaltitude'] = ((GPSRAW.alt * 3.2808) /1000) - 700
             # ============================================
             # powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
             # if powerStatus is not None:
             #     data['powerstatus'] = powerStatus.Vcc  / 1000
             # ============================================
-            # padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
-            # data['padaSpeed'] = padaSpeed.airspeed
+            if PADAconn_established == True:
+                try:
+                    padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
+                    data['speed'] = padaSpeed.airspeed
+                except:
+                    print("error getting the speed")
             # ============================================
             # ============================================
             # Attitude= mav_conn.recv_match(type = 'ATTITUDE', blocking=True )
@@ -567,7 +635,6 @@ def getHeartbeat():
                     log.insert(1.0, f"code {servo_msg.servo1_raw} : DAS running with color : {current_color}\n", "color1")
                     DAS_runnning = True
 
-
                 if any(existing_code == 1440 for existing_code, _ in event_listener) and missionRecieved == False: 
                     sleep(2)
                     mav_conn.waypoint_request_list_send()
@@ -586,25 +653,22 @@ def getHeartbeat():
                     elif servo_msg_for_mission:
                         log.insert(1.0, f"Mission count received: {servo_msg_for_mission.count}\n", "color1")
                         missionRecieved = True
-                        lat = 0.0
-                        lon = 0.0
+                        
                         for seq in range(servo_msg_for_mission.count):
                             while True:                   # Request the specific waypoint
                                 mav_conn.waypoint_request_send(seq)
                                 waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True , timeout=1)
                                 if waypoint:
+                                    lat = 0
+                                    lon = 0
                                     print(f"Waypoint {seq}: Lat {waypoint.x}, Lon {waypoint.y}, Alt {waypoint.z}")
                                     print("Full precision:", f"Lat {format(waypoint.x, '.8f')}, Lon {format(waypoint.y, '.8f')}")
                                     lat = waypoint.x  # Latitude
                                     lon = waypoint.y  # Longitude
+                                    sendPADALat = waypoint.x
+                                    sendPADALon = waypoint.y
                                     log.insert(1.0, f"Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
                                     print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
-                                    pada_arm = StringVar()
-                                    pada_arm.set("Which Direction?")
-                                    pada_sel = OptionMenu(window, pada_arm, 'North -> South','South -> North','west -> east','east -> west','north east -> south west','south west -> north east','north west -> south east','south east -> north west')
-                                    pada_sel.place(x=0.28*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
-                                    sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA(lat, lon , pada_arm.get()))
-                                    sendMission.place(x=0.4*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
                                     break
 
         elif mavconn_established == False or mav_conn is None:
@@ -612,6 +676,9 @@ def getHeartbeat():
         sleep(0.5)
 
 def creategui():
+
+    global sendPADALat
+    global sendPADALon
 
     # ADD SETTINGS
     def change_screen(screen_name):
@@ -628,6 +695,15 @@ def creategui():
                 window.after(1)
                 creategui()
         pass
+
+    pada_arm = StringVar()
+    pada_arm.set("Which Direction?")
+    pada_sel = OptionMenu(window, pada_arm, 'North -> South','South -> North','west -> east','east -> west','north east -> south west','south west -> north east','north west -> south east','south east -> north west')
+    pada_sel.place(x=0.28*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
+    sendMission = ttk.Button(window, text="Send Mission", command=lambda: sendMissionToPADA( sendPADALat , sendPADALon , pada_arm.get()))
+    sendMission.place(x=0.4*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
+
+
 
     menu = ttk.Menubutton(window, text="Utility Menu")
     menu.place(x=(0.01*(screen_width)), y=(0.01*(screen_height)))
@@ -658,12 +734,12 @@ def creategui():
     altvar.grid(row=1,column=0,sticky="news", padx=0.001*(screen_width))
 # =======================================
     #ALTITUDE
-    # GPSaltitude = ttk.Label(dashboard, text="GPS Altitude", font=('None', 20))
-    # GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
+    GPSaltitude = ttk.Label(dashboard, text="GPS Altitude", font=('None', 20))
+    GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
 
-    # #ALTTITUDE VAR
-    # GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 90))
-    # GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
+    #ALTTITUDE VAR
+    GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 90))
+    GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
 # ===========================================
     #HEADING
     heading = ttk.Label(dashboard, text="Heading", font=('None', 20))
@@ -806,8 +882,6 @@ def creategui():
     dashboard4.place(x=0.3*(screen_width), y=0.52*(screen_height))
     #Var Ints
 
-
-
     # ##################################################################################################################################
 
     # jetsonreset = ttk.Button(window, text="Reset Jetson", command= restartjetson) 
@@ -892,8 +966,6 @@ def creategui():
     # sysvar = StringVar()
     sysstart = ttk.Button(window, text="START DAS" , command=(start_system))
     
-    
-    
     # sysvar.set("waiting for jetson ... ")
     # startsys = OptionMenu(window,sysvar ,"")
     # startsys.place(x=0.01*(screen_width),y=0.6*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
@@ -901,8 +973,6 @@ def creategui():
 # --------------------------------------------------------------------------------------------------------------
 
     initialization()
-    # global event_listener
-    # event_listener.append((1, datetime.now().strftime("%Y %m %d %H:%M:%S")))
 
 # --------------------------------------------------------------------------------------------
     def updateDashInfoFunction():
@@ -910,14 +980,14 @@ def creategui():
         time = raw_TS.strftime("%H:%M:%S %p")
         timelabel.config(text=time)
         # window.after(1000, uptadeTime)
-        # GPSaltvar.config(text="{:.1f} ft".format(data['GPSaltitude']))
+        GPSaltvar.config(text="{:.1f} ft".format(data['GPSaltitude']))
         altvar.config(text="{:.2f} ft".format(data['altitude']))  #### LETS ADD A UNIT TO THIS ####
         hdgvar.config(text="{:.2f}".format(data['headingAngle']))
         latvar.config(text="{:.10f}".format(data['latitude']))
         longvar.config(text="{:.10f}".format(data['longitude']))
         spdvar.config(text="{:.2f}".format(data['speed']))
         # pwrvar.config(text="{:}".format(data['powerstatus']))
-        window.after(1000, updateDashInfoFunction)
+        window.after(500, updateDashInfoFunction)
 
 
     updateTimes = threading.Thread(target=uptadeTime , daemon=True)
