@@ -11,28 +11,26 @@ def upload_mission_from_array(waypoints):
 
     waypointArray = waypoints
     success = False
-    max_retries_per_waypoint = 3
+    max_retries_per_waypoint = 10
+    # master = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600)
+    # master.wait_heartbeat()
+    # print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
 
     while success == False:
+        try:
+            master = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=115200)
 
-        master = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600)
-        master.wait_heartbeat()
-        print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
-        master.waypoint_clear_all_send()  # Clear existing mission
-        sleep(2) 
-
-        master.waypoint_count_send(len(waypointArray))
-        all_waypoints_sent = True
-        for waypoint in waypointArray:
+            master.waypoint_clear_all_send()  # Clear existing mission
+            sleep(2) 
+            print("Cleared the existing waypoints .")
+            master.waypoint_count_send(len(waypointArray))
+            
             retry_count = 0
+            all_waypoints_sent = False
             waypoint_sent_successfully = False
-
-            while retry_count < max_retries_per_waypoint and not waypoint_sent_successfully:
-                # Convert waypoint data to the expected types
-                seq, current, frame, command = int(waypoint[0]), int(waypoint[1]), int(waypoint[2]), int(waypoint[3])
-                param1, param2, param3, param4 = float(waypoint[4]), float(waypoint[5]), float(waypoint[6]), float(waypoint[7])
-                x, y, z = float(waypoint[8]), float(waypoint[9]), float(waypoint[10])
-                autocontinue = int(waypoint[11])
+            # retry_count < max_retries_per_waypoint
+            while not waypoint_sent_successfully:
+                # # Convert waypoint data to the expected types
 
                 # Wait for the vehicle to request each waypoint
                 sleep(1)
@@ -40,30 +38,50 @@ def upload_mission_from_array(waypoints):
                 if msg is not None:
                     print(f"Vehicle requested waypoint {msg.seq}")
 
+                    requestedMission = waypointArray[msg.seq]
+
+                    seq, current, frame, command = int(requestedMission[0]), int(requestedMission[1]), int(requestedMission[2]), int(requestedMission[3])
+                    param1, param2, param3, param4 = float(requestedMission[4]), float(requestedMission[5]), float(requestedMission[6]), float(requestedMission[7])
+                    x, y, z = float(requestedMission[8]), float(requestedMission[9]), float(requestedMission[10])
+                    autocontinue = int(requestedMission[11])
                     # Create and send the mission item
                     master.mav.mission_item_send(master.target_system, master.target_component,
                                                 seq, frame, command,
                                                 current, autocontinue, param1, param2, param3, param4,
                                                 x, y, z)
                     print(f"Sending waypoint {seq}: Lat {x}, Lon {y}, Alt {z}")
+                    ack = master.recv_match(type='MISSION_ACK', blocking=True , timeout=3)
+                    if ack and ack.type == mavutil.mavlink.MAV_MISSION_ACCEPTED:
+                        if msg.seq >= 3:
+                            all_waypoints_sent = True
+                        print("Mission successfully uploaded.")
+                        # success = True
+                        # trying = max_try
+                        print("Last waypoint sent.")
+                        # waypoint_sent_successfully = True
+                    else:
+                        print(f"Mission upload failed with error: {ack.type}" if ack else "No MISSION_ACK received.")
+
+                elif msg is None and all_waypoints_sent:
+                    # trying = 0
+                    # max_try = 10
+                    # Wait for mission acknowledgment only if all waypoints were sent successfully
+                    # while trying < max_try and not success:
+                    #         trying += 1
+                    success = True
                     waypoint_sent_successfully = True
-                else:
-                    print(f"Timeout waiting for vehicle to request waypoint. Retry {retry_count + 1} of {max_retries_per_waypoint}")
-                    retry_count += 1  # Increment retry count
+                elif msg is None:
+                    print("No MISSION_REQUEST received.")
 
             if not waypoint_sent_successfully:
                 print(f"Failed to send waypoint after {max_retries_per_waypoint} retries. Aborting mission upload.")
                 all_waypoints_sent = False
                 break  # Exit the loop if a waypoint fails to send
 
-        if all_waypoints_sent:
-            # Wait for mission acknowledgment only if all waypoints were sent successfully
-            ack = master.recv_match(type='MISSION_ACK', blocking=True , timeout=5)
-            if ack and ack.type == mavutil.mavlink.MAV_MISSION_ACCEPTED:
-                print("Mission successfully uploaded.")
-                success = True
-            else:
-                print(f"Mission upload failed with error: {ack.type}" if ack else "No MISSION_ACK received.")
+        except:
+            print ("failed . trying again ")
+            if master is not None:
+                master.close()
     master.close()
 
 

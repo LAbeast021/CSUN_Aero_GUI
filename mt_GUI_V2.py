@@ -14,11 +14,10 @@ import threading
 import multiprocessing
 from pymavlink import mavutil
 from multiprocessing import Process
-# ============== Functions ==============
+# ==================== Functions =====================
 from logSaver import saveLoggs
-# ==================== END OF IMPORTS ==============
+# ==================== END OF IMPORTS ================
 # ==================== GLOBAL VARIABLES ==============
-print("beggining of the code")
 global mavconn_established
 mavconn_established = False
 
@@ -48,8 +47,8 @@ elif sys.platform == 'win32':
     window_call_string = r"./azure.tcl" # this is randy's path 
     # window_call_string = (os.getcwd() + '\\GS_Multithreading\\azure.tcl')
 elif sys.platform == 'darwin':
-    mav_conn_string = '/dev/tty.usbserial-AK06O4AL'
-    pada_conn_string = '/dev/tty.usbserial-B0016NGB'
+    mav_conn_string = '/dev/tty.usbserial-B000IDOQ'
+    pada_conn_string = '/dev/tty.usbserial-AK06O4AL'
     window_call_string = "/Users/labeast021/Desktop/GUI/Aero2024/azure.tcl"
 else:
     print("ERROR: Unrecognized OS")
@@ -69,15 +68,17 @@ data = {
 global sendPADALat
 global sendPADALon
 
-sendPADALat = 34.878787878
-sendPADALon =-118.8787878787787
+global color_pwm
+color_pwm = 0
+
+sendPADALat = 0
+sendPADALon = 0
 
 global logArray
 logArray = []
 
 global GPSLogger
 GPSLogger = []
-
 
 global triesForMission
 triesForMission = 0
@@ -101,25 +102,15 @@ event_listener = []
 event_listener.append((1, datetime.now().strftime("%Y %m %d %H:%M:%S")))
 
 global jetsonReady
-# jetsonReady = False
 global programRunning
-# programRunning = False
 global colorRecieved
-# colorRecieved = False
 global colorSent
-# colorSent = False
 global DAS_runnning
-# DAS_runnning = False
 global DAS_stopped
-# DAS_stopped = False
 global missionRecieved
-# missionRecieved = False
 global missionSent
-# missionSent = False
 global errorHandled 
-# errorHandled = Fa
 global padaReadyToRelease
-padaReadyToRelease = True
 global start_time
 global statusRecieved
 global colorWaitRecieved 
@@ -127,6 +118,7 @@ global current_color
 global sysvar
 global sysstart
 global sendMission
+global timestamp
 # ---------------------------------------------------------- END OF GLOBAL VARIABLES -------------------------------------------------------------------
 
 # Get the primary monitor's screen resolution
@@ -141,6 +133,7 @@ pst = timezone('US/Pacific')
 raw_TS = datetime.now(pst)
 
 dateandtime = raw_TS.strftime("%b_%d_%Y_%H_%M_%S")
+timestamp = raw_TS.strftime("[%H:%M:%S]")
 
 # Create the flight data directory if it doesn't exist
 flightdatadir = "flightdata"
@@ -213,10 +206,10 @@ log.tag_configure("color1", foreground="green"  , font=bold_font)
 log.tag_configure("color2", foreground="orange", font=bold_font) 
 log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
-log.tag_configure("font1", font=("TkDefaultFont", int(0.035*(screen_height))))
+log.tag_configure("font1", font=("TkDefaultFont", int(0.04*(screen_height))))
 # log.tag_add("font1", "1.0", "end")
 
-log.insert(1.0, "Welcome to the CSUN Aeronautics Ground Station Log\n")
+log.insert(1.0, f"{timestamp} Welcome to the CSUN Aeronautics Ground Station Log\n")
 #---------------------------- END OF LOG TEXT BOX  ----------------------------
 
 #---------------------------- logging the data   ----------------------------
@@ -225,9 +218,10 @@ def logSaverFunction():
     global logArray
     global event_listener
     global GPSLogger
-
-    logArray.append(event_listener)
+    global timestamp
+    log.insert(1.0, f"{timestamp} Saving Logs . . .\n" , "color4")
     saveLoggs(GPSLogger , event_listener)
+    log.insert(1.0, f"{timestamp} Logs Saved\n" , "color4")
 
 # --------------------------- Establishing connection to primary and PADA  . --------------------------
 def request_message_interval(message_id, frequency_hz , device):
@@ -259,7 +253,7 @@ def establish_mav_connection(report):
         if heartbeat is None:
             mavconn_established = False
             if report:
-                log.insert(1.0, "No heartbeat received. Connection not established to Orange Cube.\n", "color3")
+                log.insert(1.0, f"{timestamp} No heartbeat received. Connection not established to Orange Cube.\n", "color3")
             # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
             # print("No heartbeat received. Connection not established.")
         else:
@@ -268,13 +262,13 @@ def establish_mav_connection(report):
             request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT, 10 , 0)  # Every 1 second for raw GPS data     
             request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 10 , 0)  # Every 1 second for raw GPS data 
             request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE, 10 , 0)  # Every 1 second for raw GPS data 
-            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 10 , 0)  # Every 1 second for raw GPS data
-            log.insert(1.0, "Connection successfully established To Orange Cube!\n", "color1")
+            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 2 , 0)  
+            log.insert(1.0, f"{timestamp} Connection successfully established To Orange Cube!\n", "color1")
             # print("Connection successfully established!")
         
     except Exception as e:
         if report:
-            log.insert(1.0, f"Failed to establish connection to orange cube: {e}\n", "color3")
+            log.insert(1.0, f"{timestamp} Failed to establish connection to orange cube: {e}\n", "color3")
             
         # Handle cases where connection fails for other reasons
         # log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
@@ -290,25 +284,25 @@ def establish_PADA_connection(report):
     try:
         # Attempt to establish a MAVLink connection
         # mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
-        PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=57600)
-        heartbeat = PADA_conn.wait_heartbeat(timeout=5)
+        PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=115200)
+        heartbeat = PADA_conn.wait_heartbeat(timeout=0.5)
         
         if heartbeat is None:
             PADAconn_established = False
             if report:
-                log.insert(1.0, "No heartbeat received. Connection not established to PADA.\n", "color3")
+                log.insert(1.0, f"{timestamp} No heartbeat received. Connection not established to PADA.\n", "color3")
             # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
             # print("No heartbeat received. Connection not established.")
         else:
             event_listener.append((9, datetime.now().strftime("%Y %m %d %H:%M:%S")))
             PADAconn_established = True
             request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_VFR_HUD, 10 , 1)  # Every 1 second for raw GPS data     
-            log.insert(1.0, "Connection successfully established To PADA!\n", "color1")
+            log.insert(1.0, f"{timestamp} Connection successfully established To PADA!\n", "color1")
             # print("Connection successfully established!")
         
     except Exception as e:
         if report:
-            log.insert(1.0, f"Failed to establish connection to PADA: {e}\n", "color3")
+            log.insert(1.0, f"{timestamp} Failed to establish connection to PADA: {e}\n", "color3")
             
         # Handle cases where connection fails for other reasons
         # log.insert(1.0, f"Failed to establish connection: {e}\n", "color3")
@@ -320,12 +314,12 @@ establish_PADA_connection(True)
 def start_system():
     global programRunning
     global event_listener
+    global mav_conn
 
-    programRunning == False
-    if programRunning == False:
-        mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 2, 1200, 0, 0 , 0, 0, 0)
-        programRunning = True
-        event_listener.append((3, datetime.now().strftime("%Y %m %d %H:%M:%S")))
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 2, 1200, 0, 0 , 0, 0, 0)
+    sleep(0.2)
+    # programRunning = True
+    event_listener.append((3, datetime.now().strftime("%Y %m %d %H:%M:%S")))
 
 launchstatvar = ttk.Label(window, text="", font=('None', 20))
 launchstatvar.pack()
@@ -339,7 +333,7 @@ def launch():
 
     if padaReadyToRelease == True:
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
-        log.insert(1.0, f"PADA Launched at {data['altitude']}\n"  , "font1")
+        log.insert(1.0, f"{timestamp} PADA Launched at {data['altitude']}\n"  , "font1")
         # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
         # print(msg) 
         sleep(1.5)
@@ -355,7 +349,7 @@ def launch():
             mode_id)
         launchstatvar.config(text=f"PADA Launched at {data['altitude']}\n")
     else:
-        log.insert(1.0,"DANGER ! No Mission on PADA to launch\n") 
+        log.insert(1.0, f"{timestamp} DANGER ! No Mission on PADA to launch\n") 
     
 # ================================= SENDING MISSION TO PADA ======================================================= 
 def sendMissionToPADA(lat, lon , direction):
@@ -395,23 +389,23 @@ def sendMissionToPADA(lat, lon , direction):
     sleep(1)
     try:
         # Attempt to establish a MAVLink connection
-        PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=57600) # for macOS
+        PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=115200) # for macOS
         heartbeat = PADA_conn.wait_heartbeat(timeout=5)
         
         if heartbeat is None:
-            log.insert(1.0, "No heartbeat received. Connection not established to PADA.\n", "color3")
+            log.insert(1.0, f"{timestamp} No heartbeat received. Connection not established to PADA.\n", "color3")
             # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
             print("No heartbeat received. Connection not established TO PADA.")
         else:
             PADAconn_established = True
-            log.insert(1.0, "Connection successfully established To PADA!\n", "color1")
+            log.insert(1.0, f"{timestamp} Connection successfully established To PADA!\n", "color1")
             print("Connection successfully established! to PADA")
     
     except Exception as e:
-        log.insert(1.0, f"Failed to establish connection to PADA: {e}\n", "color3")
+        log.insert(1.0, f"{timestamp} Failed to establish connection to PADA: {e}\n", "color3")
     # Handle cases where connection fails for other reasons
 
-    log.insert(1.0, "Mission Sent To PADA !\n", "color1")
+    log.insert(1.0, f"{timestamp} Mission Sent To PADA !\n", "color1")
 
 def stopDetection():
     global DAS_runnning
@@ -420,8 +414,8 @@ def stopDetection():
     if DAS_runnning == True:
         print(event_listener)
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 1000 , 0 , 0, 0, 0, 0)
-        sleep(1)
-        log.insert(1.0, "DAS STOPPED\n")    
+        sleep(0.5)
+        log.insert(1.0, f"{timestamp} DAS STOPPED\n")    
 
 def initialization():
     # global detectedValue
@@ -459,7 +453,6 @@ def initialization():
     global start_time
     start_time = time
     
-    
     # global sysvar
     # global sendMission
     # global sysstart
@@ -486,7 +479,6 @@ def initialization():
     sendMission = ttk.Button(window, text="Send Mission")
     sendMission.place_forget()
     # sysstart.place_forget()  # or element.grid_forget() or element.place_forget()
-
 
 def restartjetson(jetsonRunning):
         global detectedValue
@@ -533,12 +525,14 @@ def getHeartbeat():
     global GPSLogger
     global PADAconn_established
     global PADA_conn
-
     global sendPADALat
     global sendPADALon
+    global timestamp
 
     while True:
         GPSTuple = ()
+        # get current time
+        timestamp = datetime.now().strftime("[%H:%M:%S]")
         if PADAconn_established == False or PADA_conn == None:
             establish_PADA_connection(False)
 
@@ -562,13 +556,12 @@ def getHeartbeat():
             # if powerStatus is not None:
             #     data['powerstatus'] = powerStatus.Vcc  / 1000
             # ============================================
-            if PADAconn_established == True:
+            if PADAconn_established == True and PADA_conn is not None:
                 try:
-                    padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True )
+                    padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True, timeout=.3 )
                     data['speed'] = padaSpeed.airspeed
                 except:
                     print("error getting the speed")
-            # ============================================
             # ============================================
             # Attitude= mav_conn.recv_match(type = 'ATTITUDE', blocking=True )
             # yaw = Attitude.yaw
@@ -581,8 +574,7 @@ def getHeartbeat():
             # if signal is not None:
             #     # data['signalStrength'] = signal.rssi
             #     print(signal.rssi)
-            # ============================================
-                
+            # ============================================ 
             GPSTuple = (data['latitude'], data['longitude'], data['altitude'], data['headingAngle'])
             GPSLogger.append(GPSTuple)
 
@@ -596,7 +588,7 @@ def getHeartbeat():
                     # sysstart.pack() 
                     sysstart.place(x=0.12*(screen_width), y=0.6*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
                     # log.tag_configure("color1", foreground="green")  # Change "red" to the desired color
-                    log.insert(1.0, f"code {servo_msg.servo5_raw} : Jetson ready \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo_msg.servo5_raw} : Jetson ready \n", "color1")
 
             
             if not any(existing_code == servo_msg.servo1_raw for existing_code, _ in event_listener) and servo_msg.servo1_raw != 0:
@@ -607,32 +599,32 @@ def getHeartbeat():
                     if servo_msg.servo1_raw not in errorRecieved:
                         errorHandled = True if errorHandled == False else ()
                         errorRecieved.append(servo_msg.servo1_raw)
-                        log.insert(1.0, f"ERROR! CODE: {servo_msg.servo1_raw}\n", "color3")
+                        log.insert(1.0, f"{timestamp} ERROR! CODE: {servo_msg.servo1_raw}\n", "color3")
                         sysvar.set("Jetson Stopped ")
 
                 elif servo_msg.servo1_raw == 1440 and colorRecieved == True:
                     colorRecieved = False
-                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Detection Stopped \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Detection Stopped \n", "color1")
                 
                 elif servo_msg.servo1_raw == 1600 and colorWaitRecieved == False:
                     colorWaitRecieved = True
-                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Jetson waiting for color ... \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Jetson waiting for color ... \n", "color1")
                     
                 elif servo_msg.servo1_raw ==1900 and statusRecieved == False:
                     statusRecieved = True
-                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Initialization on jetson was successful \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Initialization on jetson was successful \n", "color1")
                     
                 elif servo_msg.servo1_raw == detectedValue :
-                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Detected a Target  \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Detected a Target  \n", "color1")
                     
                 elif servo_msg.servo1_raw == 800 :
-                    log.insert(1.0, f"code {servo_msg.servo1_raw} : Did not detect a target  \n", "color2")
+                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Did not detect a target  \n", "color2")
                     
                 elif servo_msg.servo1_raw in colorPWM and colorRecieved == False:
                     colorRecieved = True
                     current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
                     # rs.set(f"DAS Runnning | {current_color} ")
-                    log.insert(1.0, f"code {servo_msg.servo1_raw} : DAS running with color : {current_color}\n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : DAS running with color : {current_color}\n", "color1")
                     DAS_runnning = True
 
                 if any(existing_code == 1440 for existing_code, _ in event_listener) and missionRecieved == False: 
@@ -641,17 +633,17 @@ def getHeartbeat():
                     sleep(1)
                     
                     # mav_conn.mission_request_list_send(mav_conn.target_system, mav_conn.target_component)
-                    servo_msg_for_mission = mav_conn.recv_match(type='MISSION_COUNT', blocking=True, timeout=5)
+                    servo_msg_for_mission = mav_conn.recv_match(type='MISSION_COUNT', blocking=True, timeout=2)
 
                     if servo_msg_for_mission is None and triesForMission < 3:
-                        log.insert(1.0, f"Failed to receive mission count {triesForMission}\n", "color3")
+                        log.insert(1.0, f"{timestamp} Failed to receive mission count {triesForMission}\n", "color3")
                         for i in range(len(event_listener) - 1, -1, -1):  # Start from the last index, go to 0
                             if 1440 in event_listener[i]:
                                 del event_listener[i]  # Use del to remove the item at index i
                                 triesForMission += 1
                                 break
                     elif servo_msg_for_mission:
-                        log.insert(1.0, f"Mission count received: {servo_msg_for_mission.count}\n", "color1")
+                        log.insert(1.0, f"{timestamp} Mission count received: {servo_msg_for_mission.count}\n", "color1")
                         missionRecieved = True
                         
                         for seq in range(servo_msg_for_mission.count):
@@ -667,7 +659,7 @@ def getHeartbeat():
                                     lon = waypoint.y  # Longitude
                                     sendPADALat = waypoint.x
                                     sendPADALon = waypoint.y
-                                    log.insert(1.0, f"Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
+                                    log.insert(1.0, f"{timestamp} Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
                                     print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
                                     break
 
@@ -890,8 +882,7 @@ def creategui():
     
     # #################################################################################################################################################
     global sysstart
-    global color_pwm
-    color_pwm = 0
+    
 
     def selectColor():
         global colorRecieved
@@ -899,34 +890,33 @@ def creategui():
         if color_pwm != 0:
             colorRecieved = False
             mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 8 , color_pwm, 0, 0, 0, 0, 0)
-            log.insert(1.0, f"Color {selected_color.get()} is sent to PA\n")
+            log.insert(1.0, f"{timestamp} Color {selected_color.get()} is sent to PA\n")
             detectedValue += 2
-        
         
     def update_selected_color(*args):
         global color_pwm
+
         selected_color.set(color_options.get())
-        color_pwm = 0
         if selected_color.get() == "RED":
             color_pwm = 1550
             color_sel.configure(background='red', foreground='black')
-            log.insert(1.0, f"RED is selected\n")
+            log.insert(1.0, f"{timestamp} RED is selected\n")
         elif selected_color.get() == "BLUE":
             color_pwm = 1750
             color_sel.configure(background='blue', foreground='white')
-            log.insert(1.0, f"BLUE is selected\n")
+            log.insert(1.0, f"{timestamp} BLUE is selected\n")
         elif selected_color.get() == "ORANGE":
             color_pwm = 1650
             color_sel.configure(background='orange', foreground='black')
-            log.insert(1.0, f"ORANGE is selected\n")
+            log.insert(1.0, f"{timestamp} ORANGE is selected\n")
         elif selected_color.get() == "YELLOW":
             color_pwm = 1850
             color_sel.configure(background='yellow', foreground='black')
-            log.insert(1.0, f"YELLOW is selected\n")
+            log.insert(1.0, f"{timestamp} YELLOW is selected\n")
         elif selected_color.get() == "PURPLE":
             color_pwm = 1450            
             color_sel.configure(background='purple', foreground='black')    
-            log.insert(1.0, f"PURPLE is selected\n")
+            log.insert(1.0, f"{timestamp} PURPLE is selected\n")
         
     selected_color = StringVar()
     # DROPDOWN MENU
@@ -952,7 +942,6 @@ def creategui():
     # pada_sel.place(x=0.28*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))  
     # pada_arm.trace('w', arm_pada)   
 
-    
     # PADA RELEASE BUTTON
     release = ttk.Button(window, text="PADA LAUNCH" , command=launch)
     release.place(x=0.51*(screen_width), y=0.7*(screen_height), height=0.06*(screen_height), width=0.1*(screen_width))
@@ -989,7 +978,6 @@ def creategui():
         # pwrvar.config(text="{:}".format(data['powerstatus']))
         window.after(500, updateDashInfoFunction)
 
-
     updateTimes = threading.Thread(target=uptadeTime , daemon=True)
     updateTelemInfo = threading.Thread(target=getHeartbeat , daemon=True)
     # updateDashInfo = threading.Thread(target=updateDashInfoFunction , daemon=True) THERE REASON IS THAT YOU CANNOT UPDATE THE GUI IN A THREAD
@@ -1003,6 +991,42 @@ def creategui():
 
 creategui()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ========================================================================================================================================================================
 # total_waypoints = servo_msg_for_mission.count
                         # if total_waypoints > 0:
                         #     # Directly request the last waypoint, assuming 0-based indexing
