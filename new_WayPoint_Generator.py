@@ -11,7 +11,8 @@ def upload_mission_from_array(waypoints):
 
     waypointArray = waypoints
     success = False
-    max_retries_per_waypoint = 10
+    max_retries_per_waypoint = 4
+    master = None
     # master = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600)
     # master.wait_heartbeat()
     # print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
@@ -19,22 +20,26 @@ def upload_mission_from_array(waypoints):
     while success == False:
         try:
             master = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=115200)
+            heartbeat = master.wait_heartbeat(timeout=5)
 
             master.waypoint_clear_all_send()  # Clear existing mission
             sleep(2) 
             print("Cleared the existing waypoints .")
+
             master.waypoint_count_send(len(waypointArray))
+            sleep(1)
             
             retry_count = 0
             all_waypoints_sent = False
             waypoint_sent_successfully = False
+
             # retry_count < max_retries_per_waypoint
             while not waypoint_sent_successfully:
                 # # Convert waypoint data to the expected types
 
                 # Wait for the vehicle to request each waypoint
-                sleep(1)
                 msg = master.recv_match(type='MISSION_REQUEST', blocking=True, timeout=5)
+
                 if msg is not None:
                     print(f"Vehicle requested waypoint {msg.seq}")
 
@@ -70,8 +75,13 @@ def upload_mission_from_array(waypoints):
                     #         trying += 1
                     success = True
                     waypoint_sent_successfully = True
+
                 elif msg is None:
                     print("No MISSION_REQUEST received.")
+                    retry_count += 1
+                    if retry_count >= max_retries_per_waypoint:
+                        print(f"Failed to receive MISSION_REQUEST after {max_retries_per_waypoint} retries.")
+                        break
 
             if not waypoint_sent_successfully:
                 print(f"Failed to send waypoint after {max_retries_per_waypoint} retries. Aborting mission upload.")
@@ -85,8 +95,7 @@ def upload_mission_from_array(waypoints):
     master.close()
 
 
-
-def precision(variable, precision_level):
+def precision(variable, precision_level): 
     chars = "."
     has = all(char in str(variable) for char in chars)
     if not has:
@@ -100,7 +109,7 @@ def to_float(precision_output):
 
 
 # Initialize the waypoint generator with the provided coordinates
-def create_waypoints(lat, lon , direction_code):
+def create_waypoints(lat, lon, direction_code):
     print("we are in waypoints wohooooo")
     coordinates = waypointGenerator(lat, lon, 0 ,direction_code)
 
@@ -112,5 +121,5 @@ def create_waypoints(lat, lon , direction_code):
         ["3", "0", "3", "21", "0.00000000", "0.00000000", "0.00000000", "0.00000000", to_float(precision(coordinates.originalCoords()[0], 8)), to_float(precision(coordinates.originalCoords()[1], 8)), to_float(precision(coordinates.originalCoords()[2], 6)), "1"]
     ]
 
-    upload_mission_from_array(waypoints )
+    upload_mission_from_array(waypoints)
 

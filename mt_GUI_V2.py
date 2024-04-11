@@ -71,8 +71,8 @@ global sendPADALon
 global color_pwm
 color_pwm = 0
 
-sendPADALat = 0
-sendPADALon = 0
+sendPADALat = 34.1747008
+sendPADALon = -118.4816748
 
 global logArray
 logArray = []
@@ -172,7 +172,7 @@ window.title("CSUN Aeronautics Ground Station")
 
 # MAIN SCREEN TITLE
 label = ttk.Label(window, text="CSUN AERO 2024 GROUND", font=('None', screen_height//20))
-label.pack(padx=(0.05*(screen_width)), pady=(0.05*(screen_height)))
+label.pack(padx=(0.05*(screen_width)), pady=(0.025*(screen_height)))
 
 # ADD SCROLLBAR
 scrollbar = ttk.Scrollbar(window)
@@ -206,7 +206,7 @@ log.tag_configure("color1", foreground="green"  , font=bold_font)
 log.tag_configure("color2", foreground="orange", font=bold_font) 
 log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
-log.tag_configure("font1", font=("TkDefaultFont", int(0.04*(screen_height))))
+log.tag_configure("font1", font=("TkDefaultFont" , int(0.04*(screen_height))))
 # log.tag_add("font1", "1.0", "end")
 
 log.insert(1.0, f"{timestamp} Welcome to the CSUN Aeronautics Ground Station Log\n")
@@ -296,7 +296,7 @@ def establish_PADA_connection(report):
         else:
             event_listener.append((9, datetime.now().strftime("%Y %m %d %H:%M:%S")))
             PADAconn_established = True
-            request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_VFR_HUD, 10 , 1)  # Every 1 second for raw GPS data     
+            # request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_VFR_HUD, 10 , 1)  # Every 1 second for raw GPS data     
             log.insert(1.0, f"{timestamp} Connection successfully established To PADA!\n", "color1")
             # print("Connection successfully established!")
         
@@ -333,10 +333,10 @@ def launch():
 
     if padaReadyToRelease == True:
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
-        log.insert(1.0, f"{timestamp} PADA Launched at {data['altitude']}\n"  , "font1")
+        log.insert(1.0, f"{timestamp} PADA Launched at {data['GPSaltitude']}\n"  , "font1")
         # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
         # print(msg) 
-        sleep(1.5)
+        sleep(1)
         mode = 'AUTO'  # Define the mode you want to set; for ArduPilot, AUTO mode for autonomous operation
 
         # Find the mode ID for AUTO mode
@@ -528,6 +528,8 @@ def getHeartbeat():
     global sendPADALat
     global sendPADALon
     global timestamp
+    global color_pwm
+    global colorArray
 
     while True:
         GPSTuple = ()
@@ -550,7 +552,7 @@ def getHeartbeat():
             # ============================================
             GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
             if GPSRAW is not None:
-                data['GPSaltitude'] = ((GPSRAW.alt * 3.2808) /1000) - 700
+                data['GPSaltitude'] = ((GPSRAW.alt * 3.2808) /1000) -690
             # ============================================
             # powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
             # if powerStatus is not None:
@@ -646,22 +648,22 @@ def getHeartbeat():
                         log.insert(1.0, f"{timestamp} Mission count received: {servo_msg_for_mission.count}\n", "color1")
                         missionRecieved = True
                         
-                        for seq in range(servo_msg_for_mission.count):
-                            while True:                   # Request the specific waypoint
-                                mav_conn.waypoint_request_send(seq)
-                                waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True , timeout=1)
-                                if waypoint:
-                                    lat = 0
-                                    lon = 0
-                                    print(f"Waypoint {seq}: Lat {waypoint.x}, Lon {waypoint.y}, Alt {waypoint.z}")
-                                    print("Full precision:", f"Lat {format(waypoint.x, '.8f')}, Lon {format(waypoint.y, '.8f')}")
-                                    lat = waypoint.x  # Latitude
-                                    lon = waypoint.y  # Longitude
-                                    sendPADALat = waypoint.x
-                                    sendPADALon = waypoint.y
-                                    log.insert(1.0, f"{timestamp} Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
-                                    print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
-                                    break
+                        # for seq in range(servo_msg_for_mission.count):
+                        while True:                   # Request the specific waypoint
+                            mav_conn.waypoint_request_send(servo_msg_for_mission.count - 1)
+                            waypoint = mav_conn.recv_match(type='MISSION_ITEM', blocking=True , timeout=1)
+                            if waypoint and waypoint.z == 0:
+                                lat = 0
+                                lon = 0
+                                print(f"Waypoint {servo_msg_for_mission.count - 1}: Lat {waypoint.x}, Lon {waypoint.y}, Alt {waypoint.z}")
+                                print("Full precision:", f"Lat {format(waypoint.x, '.8f')}, Lon {format(waypoint.y, '.8f')}")
+                                lat = waypoint.x  # Latitude
+                                lon = waypoint.y  # Longitude
+                                sendPADALat = waypoint.x
+                                sendPADALon = waypoint.y
+                                log.insert(1.0, f"{timestamp} Mission Received coordinates for target -> lat: {lat}, lon: {lon}\n")
+                                print(f"Landing waypoint found: Latitude = {lat}, Longitude = {lon}")
+                                break
 
         elif mavconn_established == False or mav_conn is None:
             establish_mav_connection(False)
@@ -730,7 +732,7 @@ def creategui():
     GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
 
     #ALTTITUDE VAR
-    GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 90))
+    GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 180))
     GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
 # ===========================================
     #HEADING
@@ -887,11 +889,14 @@ def creategui():
     def selectColor():
         global colorRecieved
         global detectedValue
+        colorRecieved == False
+
         if color_pwm != 0:
             colorRecieved = False
             mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 8 , color_pwm, 0, 0, 0, 0, 0)
             log.insert(1.0, f"{timestamp} Color {selected_color.get()} is sent to PA\n")
-            detectedValue += 2
+            detectedValue = detectedValue + 2
+            sleep(0.2)
         
     def update_selected_color(*args):
         global color_pwm

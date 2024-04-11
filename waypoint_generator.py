@@ -33,7 +33,6 @@ class waypointGenerator:
     lon_conversion = 3.3095732e-6 #Apollo Field
 
     def __init__(self, lat, lon, alt , direction_code):
-        print("waypoint_generator.py ---1--1-1-1-1-1-1-11-1--11-1")
         self.lat = lat
         self.lon = lon
         self.alt = alt
