@@ -7,20 +7,25 @@ from waypoint_generator import waypointGenerator
 
 
 
+global master
+master = None
+
+global logWindow
+logWindow = None
+
 def upload_mission_from_array(waypoints):
 
     waypointArray = waypoints
     success = False
     max_retries_per_waypoint = 4
-    master = None
     # master = mavutil.mavlink_connection('/dev/tty.usbserial-B0016NGB', baud=57600)
     # master.wait_heartbeat()
     # print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
 
     while success == False:
         try:
-            master = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=115200)
-            heartbeat = master.wait_heartbeat(timeout=5)
+            # master = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=115200)
+            # heartbeat = master.wait_heartbeat(timeout=5)
 
             master.waypoint_clear_all_send()  # Clear existing mission
             sleep(2) 
@@ -42,6 +47,7 @@ def upload_mission_from_array(waypoints):
 
                 if msg is not None:
                     print(f"Vehicle requested waypoint {msg.seq}")
+                    logWindow.insert(1.0, f"Vehicle requested waypoint {msg.seq} !\n")
 
                     requestedMission = waypointArray[msg.seq]
 
@@ -55,17 +61,24 @@ def upload_mission_from_array(waypoints):
                                                 current, autocontinue, param1, param2, param3, param4,
                                                 x, y, z)
                     print(f"Sending waypoint {seq}: Lat {x}, Lon {y}, Alt {z}")
-                    ack = master.recv_match(type='MISSION_ACK', blocking=True , timeout=3)
-                    if ack and ack.type == mavutil.mavlink.MAV_MISSION_ACCEPTED:
-                        if msg.seq >= 3:
-                            all_waypoints_sent = True
-                        print("Mission successfully uploaded.")
-                        # success = True
-                        # trying = max_try
-                        print("Last waypoint sent.")
-                        # waypoint_sent_successfully = True
-                    else:
-                        print(f"Mission upload failed with error: {ack.type}" if ack else "No MISSION_ACK received.")
+                    logWindow.insert(1.0, f"Sending waypoint {seq}: Lat {x}, Lon {y}, Alt {z} \n", "color4")
+                    if seq == len(waypointArray) - 1:
+                        ack = master.recv_match(type='MISSION_ACK', blocking=True , timeout=4)
+                        if ack and ack.type == mavutil.mavlink.MAV_MISSION_ACCEPTED:
+                            if msg.seq >= 3:
+                                all_waypoints_sent = True
+                            print("Mission successfully uploaded.")
+                            logWindow.insert(1.0, f" Mission successfully uploaded To PADA !\n")
+                            # success = True
+                            # trying = max_try
+                            print("Last waypoint sent.")
+                            # waypoint_sent_successfully = True
+                        else:
+                            print(f"Mission upload failed with error: {ack.type}" if ack else "No MISSION_ACK received.")
+                            if ack:
+                                logWindow.insert(1.0, f"Mission upload failed with error: {ack.type}\n")
+                            else:
+                                logWindow.insert(1.0, f" No MISSION_ACK received. !\n")
 
                 elif msg is None and all_waypoints_sent:
                     # trying = 0
@@ -88,11 +101,9 @@ def upload_mission_from_array(waypoints):
                 all_waypoints_sent = False
                 break  # Exit the loop if a waypoint fails to send
 
-        except:
-            print ("failed . trying again ")
-            if master is not None:
-                master.close()
-    master.close()
+        except Exception as error:
+            print (f"failed with error {error} . trying again ")
+    return master
 
 
 def precision(variable, precision_level): 
@@ -109,7 +120,10 @@ def to_float(precision_output):
 
 
 # Initialize the waypoint generator with the provided coordinates
-def create_waypoints(lat, lon, direction_code):
+def create_waypoints(lat, lon, direction_code , PADA_Conn , log):
+    global master
+    global logWindow
+
     print("we are in waypoints wohooooo")
     coordinates = waypointGenerator(lat, lon, 0 ,direction_code)
 
@@ -120,6 +134,9 @@ def create_waypoints(lat, lon, direction_code):
         ["2", "0", "3", "16", "0.00000000", "0.00000000", "0.00000000", "0.00000000", to_float(precision(coordinates.find_midpoint()[0], 8)), to_float(precision(coordinates.find_midpoint()[1], 8)), to_float(precision(coordinates.find_midpoint()[2], 6)), "1"],
         ["3", "0", "3", "21", "0.00000000", "0.00000000", "0.00000000", "0.00000000", to_float(precision(coordinates.originalCoords()[0], 8)), to_float(precision(coordinates.originalCoords()[1], 8)), to_float(precision(coordinates.originalCoords()[2], 6)), "1"]
     ]
+
+    master = PADA_Conn
+    logWindow = log
 
     upload_mission_from_array(waypoints)
 

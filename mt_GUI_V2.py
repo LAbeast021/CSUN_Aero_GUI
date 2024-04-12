@@ -285,7 +285,7 @@ def establish_PADA_connection(report):
         # Attempt to establish a MAVLink connection
         # mav_conn = mavutil.mavlink_connection('/dev/tty.usbserial-AK06O4AL', baud=57600) # for macOS
         PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=115200)
-        heartbeat = PADA_conn.wait_heartbeat(timeout=0.5)
+        heartbeat = PADA_conn.wait_heartbeat(timeout=1)
         
         if heartbeat is None:
             PADAconn_established = False
@@ -333,7 +333,8 @@ def launch():
 
     if padaReadyToRelease == True:
         mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
-        log.insert(1.0, f"{timestamp} PADA Launched at {data['GPSaltitude']}\n"  , "font1")
+        rounded_altitude = math.floor(data['GPSaltitude']) 
+        log.insert(1.0, f"{timestamp} PADA Launched at {rounded_altitude} ft\n"  , "font1")
         # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
         # print(msg) 
         sleep(1)
@@ -347,7 +348,7 @@ def launch():
             PADA_conn.target_system,
             mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
             mode_id)
-        launchstatvar.config(text=f"PADA Launched at {data['altitude']}\n")
+        
     else:
         log.insert(1.0, f"{timestamp} DANGER ! No Mission on PADA to launch\n") 
     
@@ -378,34 +379,32 @@ def sendMissionToPADA(lat, lon , direction):
     elif direction == 'south east -> north west':
         direction_code = 7
     
-    PADA_conn.close()
-    PADA_conn = None
-    PADAconn_established = False
+    # PADA_conn.close()
+    # PADA_conn = None
+    # PADAconn_established = False
 
-    thread1 = threading.Thread(target = create_waypoints, args=(lat, lon , direction_code))
+    thread1 = threading.Thread(target = create_waypoints, args=(lat, lon , direction_code, PADA_conn , log))
     thread1.start()
-    thread1.join()
 
     sleep(1)
-    try:
-        # Attempt to establish a MAVLink connection
-        PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=115200) # for macOS
-        heartbeat = PADA_conn.wait_heartbeat(timeout=5)
+    # try:
+    #     # Attempt to establish a MAVLink connection
+    #     PADA_conn = mavutil.mavlink_connection(pada_conn_string, baud=115200) # for macOS
+    #     heartbeat = PADA_conn.wait_heartbeat(timeout=5)
         
-        if heartbeat is None:
-            log.insert(1.0, f"{timestamp} No heartbeat received. Connection not established to PADA.\n", "color3")
-            # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
-            print("No heartbeat received. Connection not established TO PADA.")
-        else:
-            PADAconn_established = True
-            log.insert(1.0, f"{timestamp} Connection successfully established To PADA!\n", "color1")
-            print("Connection successfully established! to PADA")
+    #     if heartbeat is None:
+    #         log.insert(1.0, f"{timestamp} No heartbeat received. Connection not established to PADA.\n", "color3")
+    #         # log.insert(1.0, "No heartbeat received. Connection not established.\n", "color3")
+    #         print("No heartbeat received. Connection not established TO PADA.")
+    #     else:
+    #         PADAconn_established = True
+    #         log.insert(1.0, f"{timestamp} Connection successfully established To PADA!\n", "color1")
+    #         print("Connection successfully established! to PADA")
     
-    except Exception as e:
-        log.insert(1.0, f"{timestamp} Failed to establish connection to PADA: {e}\n", "color3")
-    # Handle cases where connection fails for other reasons
+    # except Exception as e:
+    #     log.insert(1.0, f"{timestamp} Failed to establish connection to PADA: {e}\n", "color3")
+    # # Handle cases where connection fails for other reasons
 
-    log.insert(1.0, f"{timestamp} Mission Sent To PADA !\n", "color1")
 
 def stopDetection():
     global DAS_runnning
@@ -541,7 +540,9 @@ def getHeartbeat():
         if mavconn_established == True and mav_conn is not None:
             globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
             if globalPosition is not None:
-                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 ) #Chnage to airfield alt
+                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 )
+                if data["altitude"] < 0: #Chnage to airfield alt
+                    data["altitude"] = 1
                 data['headingAngle'] = globalPosition.hdg / 100
                 data['latitude'] = globalPosition.lat / 1e7
                 data['longitude'] = globalPosition.lon / 1e7
@@ -552,18 +553,20 @@ def getHeartbeat():
             # ============================================
             GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
             if GPSRAW is not None:
-                data['GPSaltitude'] = ((GPSRAW.alt * 3.2808) /1000) -690
+                data['GPSaltitude'] = ((GPSRAW.alt * 3.2808) /1000) - 680
+                if data["GPSaltitude"] < 0:
+                    data["GPSaltitude"] = 1
             # ============================================
             # powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
             # if powerStatus is not None:
             #     data['powerstatus'] = powerStatus.Vcc  / 1000
             # ============================================
-            if PADAconn_established == True and PADA_conn is not None:
-                try:
-                    padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True, timeout=.3 )
-                    data['speed'] = padaSpeed.airspeed
-                except:
-                    print("error getting the speed")
+            # if PADAconn_established == True and PADA_conn is not None:
+            #     try:
+            #         padaSpeed= PADA_conn.recv_match(type = 'VFR_HUD', blocking=True, timeout=.3 )
+            #         data['speed'] = padaSpeed.airspeed
+            #     except:
+            #         print("error getting the speed")
             # ============================================
             # Attitude= mav_conn.recv_match(type = 'ATTITUDE', blocking=True )
             # yaw = Attitude.yaw

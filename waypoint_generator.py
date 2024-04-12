@@ -53,7 +53,7 @@ class waypointGenerator:
         y2 = waypoint[1]
         mid_x_coordinate = round(((x1 + x2) / 2), 6)
         mid_y_coordinate = round(((y1 + y2) / 2), 6)
-        midpoint = [mid_x_coordinate, mid_y_coordinate, self.ft_to_m(25)]
+        midpoint = [mid_x_coordinate, mid_y_coordinate, self.ft_to_m(24)]
         return midpoint
 
     # Generate first waypoint:
@@ -61,36 +61,36 @@ class waypointGenerator:
 # ========================================================================================================================
             # this code creates the waypoint from north -> south
         if self.direction_code == 0:
-            waypoint = [round(self.lat + (200 * self.lat_conversion), 6), self.lon, self.ft_to_m(self.alt + 50)]
+            waypoint = [round(self.lat + (100 * self.lat_conversion), 6), self.lon, self.ft_to_m(self.alt + 32.81)]
 # ========================================================================================================================
             # this code creates the waypoint from south -> north 
         elif self.direction_code == 1 :
-            waypoint = [round(self.lat - (200 * self.lat_conversion), 6), self.lon, self.ft_to_m(self.alt + 50)]
+            waypoint = [round(self.lat - (100 * self.lat_conversion), 6), self.lon, self.ft_to_m(self.alt + 32.81)]
 # ========================================================================================================================
             # this code creates the waypoint from west -> east 
         elif self.direction_code == 2:
-            waypoint = [ self.lat ,round(self.lon - (200 * self.lon_conversion), 6), self.ft_to_m(self.alt + 50)]
+            waypoint = [ self.lat ,round(self.lon - (100 * self.lon_conversion), 6), self.ft_to_m(self.alt + 32.81)]
 
 # ========================================================================================================================
             # this code creates the waypoint from east -> west
         elif self.direction_code == 3:
-            waypoint = [ self.lat ,round(self.lon + (200 * self.lon_conversion), 6), self.ft_to_m(self.alt + 50)]
+            waypoint = [ self.lat ,round(self.lon + (100 * self.lon_conversion), 6), self.ft_to_m(self.alt + 32.81)]
 # ========================================================================================================================
             # this code creates the waypoint from north east -> south west
         elif self.direction_code == 4:
-            waypoint = [ round(self.lat + (141.421356237 * self.lat_conversion), 6) ,round(self.lon + (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 50)]
+            waypoint = [ round(self.lat + (141.421356237 * self.lat_conversion), 6) ,round(self.lon + (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 32.81)]
 # ======================================================================================================================== 
             # this code creates the waypoint from south west -> north east
         elif self.direction_code == 5:
-            waypoint = [ round(self.lat - (141.421356237 * self.lat_conversion), 6) ,round(self.lon - (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 50)]
+            waypoint = [ round(self.lat - (141.421356237 * self.lat_conversion), 6) ,round(self.lon - (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 32.81)]
 # ========================================================================================================================
             # this code creates the waypoint from north west -> south east
         elif self.direction_code == 6:
-            waypoint = [ round(self.lat + (141.421356237 * self.lat_conversion), 6) ,round(self.lon - (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 50)]
+            waypoint = [ round(self.lat + (141.421356237 * self.lat_conversion), 6) ,round(self.lon - (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 32.81)]
 # ========================================================================================================================
             # this code creates the waypoint from south east -> north west
         elif self.direction_code == 7:
-            waypoint = [ round(self.lat - (141.421356237 * self.lat_conversion), 6) ,round(self.lon + (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 50)]
+            waypoint = [ round(self.lat - (141.421356237 * self.lat_conversion), 6) ,round(self.lon + (141.421356237 * self.lon_conversion), 6), self.ft_to_m(self.alt + 32.81)]
 
 
         return waypoint
