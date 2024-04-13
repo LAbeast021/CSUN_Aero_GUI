@@ -53,7 +53,7 @@ class waypointGenerator:
         y2 = waypoint[1]
         mid_x_coordinate = round(((x1 + x2) / 2), 6)
         mid_y_coordinate = round(((y1 + y2) / 2), 6)
-        midpoint = [mid_x_coordinate, mid_y_coordinate, self.ft_to_m(24)]
+        midpoint = [mid_x_coordinate, mid_y_coordinate, self.ft_to_m(26)]
         return midpoint
 
     # Generate first waypoint:

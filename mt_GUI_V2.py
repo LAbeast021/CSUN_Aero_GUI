@@ -172,14 +172,14 @@ window.title("CSUN Aeronautics Ground Station")
 
 # MAIN SCREEN TITLE
 label = ttk.Label(window, text="CSUN AERO 2024 GROUND", font=('None', screen_height//20))
-label.pack(padx=(0.05*(screen_width)), pady=(0.025*(screen_height)))
+label.pack(padx=(0.05*(screen_width)), pady=(0.01*(screen_height)))
 
 # ADD SCROLLBAR
 scrollbar = ttk.Scrollbar(window)
 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
 # VERSION
-version = "K.7.0"
+version = "K.8.2"
 gui_version = ttk.Label(window, text="Version: " + version, font=('None',10))
 gui_version.place(x=(0.8*(screen_width)),y=(0.01*(screen_height)))
 
@@ -199,14 +199,14 @@ timelabel.config(text=time)
 
 #---------------------------- LOG TEXT BOX CREATION ----------------------------
 log = Text(window, height=int(0.025*(screen_height)), width=int(0.05*(screen_width)),xscrollcommand=True,yscrollcommand=True,state='normal')
-log.place(x=0.64*(screen_width), y=0.53*(screen_height))
+log.place(x=0.64*(screen_width), y=0.47*(screen_height))
 bold_font = font.Font(family='TkDefaultFont', size=10, weight='bold')
 
 log.tag_configure("color1", foreground="green"  , font=bold_font)
 log.tag_configure("color2", foreground="orange", font=bold_font) 
 log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
-log.tag_configure("font1", font=("TkDefaultFont" , int(0.04*(screen_height))))
+log.tag_configure("font1", font=("TkDefaultFont" , int(0.06*(screen_height))))
 # log.tag_add("font1", "1.0", "end")
 
 log.insert(1.0, f"{timestamp} Welcome to the CSUN Aeronautics Ground Station Log\n")
@@ -331,26 +331,24 @@ def launch():
 
     global PADA_conn
 
-    if padaReadyToRelease == True:
-        mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
-        rounded_altitude = math.floor(data['GPSaltitude']) 
-        log.insert(1.0, f"{timestamp} PADA Launched at {rounded_altitude} ft\n"  , "font1")
-        # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
-        # print(msg) 
-        sleep(1)
-        mode = 'AUTO'  # Define the mode you want to set; for ArduPilot, AUTO mode for autonomous operation
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
+    rounded_altitude = math.floor(data['GPSaltitude']) 
+    log.insert(1.0, f"PADA Launched at {rounded_altitude} ft\n"  , "font1")
+    # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
+    # print(msg) 
+    sleep(1)
+    mode = 'AUTO'  # Define the mode you want to set; for ArduPilot, AUTO mode for autonomous operation
 
-        # Find the mode ID for AUTO mode
-        mode_id = PADA_conn.mode_mapping()[mode]
+    # Find the mode ID for AUTO mode
+    mode_id = PADA_conn.mode_mapping()[mode]
 
-        # Set the mode
-        PADA_conn.mav.set_mode_send(
-            PADA_conn.target_system,
-            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            mode_id)
+    # Set the mode
+    PADA_conn.mav.set_mode_send(
+        PADA_conn.target_system,
+        mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+        mode_id)
         
-    else:
-        log.insert(1.0, f"{timestamp} DANGER ! No Mission on PADA to launch\n") 
+  
     
 # ================================= SENDING MISSION TO PADA ======================================================= 
 def sendMissionToPADA(lat, lon , direction):
@@ -540,9 +538,9 @@ def getHeartbeat():
         if mavconn_established == True and mav_conn is not None:
             globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
             if globalPosition is not None:
-                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 )
-                if data["altitude"] < 0: #Chnage to airfield alt
-                    data["altitude"] = 1
+                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 ) 
+                # if data["altitude"] < -1: #Chnage to airfield alt
+                #     data["altitude"] = 1
                 data['headingAngle'] = globalPosition.hdg / 100
                 data['latitude'] = globalPosition.lat / 1e7
                 data['longitude'] = globalPosition.lon / 1e7
@@ -553,8 +551,9 @@ def getHeartbeat():
             # ============================================
             GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
             if GPSRAW is not None:
-                data['GPSaltitude'] = ((GPSRAW.alt * 3.2808) /1000) - 680
-                if data["GPSaltitude"] < 0:
+                data['GPSaltitude'] = math.floor((GPSRAW.alt * 3.2808) / 1000) -  704 # ADD ZERO TERM HERE
+
+                if data["GPSaltitude"] < -10:
                     data["GPSaltitude"] = 1
             # ============================================
             # powerStatus = mav_conn.recv_match(type = 'POWER_STATUS', blocking=True)
@@ -723,36 +722,36 @@ def creategui():
     #LABEL CREATION THIS EDITS NAMES ONLY/ VAR variants are the data that will be displayed default is 0
 
     #ALTITUDE
-    altitude = ttk.Label(dashboard, text="Altitude", font=('None', 20))
+    altitude = ttk.Label(dashboard, text="Relative Altitude (ft)", font=('None', 20))
     altitude.grid(row=0,column=0, sticky="news", padx=0.001*(screen_width))
 
     #ALTTITUDE VAR
-    altvar = ttk.Label(dashboard, text="0", font=('None', 90))
+    altvar = ttk.Label(dashboard, text="0", font=('None', 180))
     altvar.grid(row=1,column=0,sticky="news", padx=0.001*(screen_width))
 # =======================================
     #ALTITUDE
-    GPSaltitude = ttk.Label(dashboard, text="GPS Altitude", font=('None', 20))
+    GPSaltitude = ttk.Label(dashboard, text="GPS Altitude(ft)", font=('None', 20))
     GPSaltitude.grid(row=0,column=4, sticky="news", padx=0.001*(screen_width))
 
     #ALTTITUDE VAR
     GPSaltvar = ttk.Label(dashboard, text="0", font=('None', 180))
     GPSaltvar.grid(row=1,column=4,sticky="news", padx=0.001*(screen_width))
 # ===========================================
-    #HEADING
-    heading = ttk.Label(dashboard, text="Heading", font=('None', 20))
-    heading.grid(row=0,column=1, sticky="news", padx=0.001*(screen_width))
+    # #HEADING
+    # heading = ttk.Label(dashboard, text="Heading (Degree,True North)", font=('None', 20))
+    # heading.grid(row=0,column=1, sticky="news", padx=0.001*(screen_width))
 
-    #HEADING VAR
-    hdgvar = ttk.Label(dashboard, text="0", font=('None', 90))
-    hdgvar.grid(row=1,column=1,sticky="news")
+    # #HEADING VAR
+    # hdgvar = ttk.Label(dashboard, text="0", font=('None', 180))
+    # hdgvar.grid(row=1,column=1,sticky="news")
 
-    #AIRSPEED
-    airspeed = ttk.Label(dashboard, text="Airspeed", font=('None', 20))
-    airspeed.grid(row=0,column=2, sticky="news")
+    # #AIRSPEED
+    # airspeed = ttk.Label(dashboard, text="Airspeed", font=('None', 20))
+    # airspeed.grid(row=0,column=2, sticky="news")
 
-    #AIRSPEED VAR
-    spdvar = ttk.Label(dashboard, text="0", font=('None', 90))
-    spdvar.grid(row=1,column=2,sticky="news")
+    # #AIRSPEED VAR
+    # spdvar = ttk.Label(dashboard, text="0", font=('None', 90))
+    # spdvar.grid(row=1,column=2,sticky="news")
 
 
     # airspeed_text = tk.StringVar()
@@ -782,6 +781,13 @@ def creategui():
     longitude = ttk.Label(dashboard2line, text="Longitude", font=('None', 20))
     longitude.grid(row=0,column=1, sticky="news")
 
+    #HEADING
+    heading = ttk.Label(dashboard2line, text="Heading (Degree,True North)", font=('None', 20))
+    heading.grid(row=0,column=2, sticky="news", padx=0.001*(screen_width))
+
+    #HEADING VAR
+    hdgvar = ttk.Label(dashboard2line, text="0", font=('None', 50))
+    hdgvar.grid(row=1,column=2,sticky="news")
     # #POWER STATUS
     # powerstatus = ttk.Label(dashboard2line, text="Voltage Status", font=('None', 20))
     # powerstatus.grid(row=0,column=2, sticky="news",)
@@ -804,47 +810,47 @@ def creategui():
     dashboard2line.pack(fill='x')
 
 
-    #DASHBOARD 3 LAUNCH SATUS CREATION
-    dashboard3 = ttk.LabelFrame(window)
-    dashboard3.columnconfigure(0, weight=1)
-    dashboard3.columnconfigure(1, weight=1)
-    dashboard3.columnconfigure(2, weight=1)
+    # #DASHBOARD 3 LAUNCH SATUS CREATION
+    # dashboard3 = ttk.LabelFrame(window)
+    # dashboard3.columnconfigure(0, weight=1)
+    # dashboard3.columnconfigure(1, weight=1)
+    # dashboard3.columnconfigure(2, weight=1)
 
-    #DAS3 LABEL CREATION THIS EDITS NAMES ONLY
+    # #DAS3 LABEL CREATION THIS EDITS NAMES ONLY
 
-    #COLOR SENT TO PRIMARY
+    # #COLOR SENT TO PRIMARY
 
-    primcolor = ttk.Label(dashboard3, text="Color in Primary", font=('None', 12))
-    primcolor.grid(row=0,column=0, sticky="news", padx=0.0001*(screen_width))
+    # primcolor = ttk.Label(dashboard3, text="Color in Primary", font=('None', 12))
+    # primcolor.grid(row=0,column=0, sticky="news", padx=0.0001*(screen_width))
 
-    #ARMED STATUS
+    # #ARMED STATUS
 
-    armedstat = ttk.Label(dashboard3, text="Armed Status", font=('None', 12))
-    armedstat.grid(row=0,column=1, sticky="news")
+    # armedstat = ttk.Label(dashboard3, text="Armed Status", font=('None', 12))
+    # armedstat.grid(row=0,column=1, sticky="news")
 
-    #LAUNCHED STATUS
+    # #LAUNCHED STATUS
 
-    launchstat = ttk.Label(dashboard3, text="Launched Status", font=('None', 12))
-    launchstat.grid(row=0,column=2, sticky="news", padx=0.0001*(screen_width))
-
-
-    #DAS3 VAR CREATION
-
-    #Prim Color VAR
-    primcolorvar = ttk.Label(dashboard3, text="null", font=('None', 12))
-    primcolorvar.grid(row=1,column=0,sticky="news", padx=0.0001*(screen_width))
-
-    #AMRED STATUS VAR
-    armedstatvar = ttk.Label(dashboard3, text="null", font=('None', 12))
-    armedstatvar.grid(row=1,column=1,sticky="news")
-
-    #LAUNCHED STATUS VAR
-    launchstatvar = ttk.Label(dashboard3, text="Not Launched", font=('None', 12))
-    launchstatvar.grid(row=1,column=2,sticky="news",padx=0.0001*(screen_width))
+    # launchstat = ttk.Label(dashboard3, text="Launched Status", font=('None', 12))
+    # launchstat.grid(row=0,column=2, sticky="news", padx=0.0001*(screen_width))
 
 
-    #PACK TO DISPLAY
-    dashboard3.place(x=0.01, y=0.52*(screen_height))
+    # #DAS3 VAR CREATION
+
+    # #Prim Color VAR
+    # primcolorvar = ttk.Label(dashboard3, text="null", font=('None', 12))
+    # primcolorvar.grid(row=1,column=0,sticky="news", padx=0.0001*(screen_width))
+
+    # #AMRED STATUS VAR
+    # armedstatvar = ttk.Label(dashboard3, text="null", font=('None', 12))
+    # armedstatvar.grid(row=1,column=1,sticky="news")
+
+    # #LAUNCHED STATUS VAR
+    # launchstatvar = ttk.Label(dashboard3, text="Not Launched", font=('None', 12))
+    # launchstatvar.grid(row=1,column=2,sticky="news",padx=0.0001*(screen_width))
+
+
+    # #PACK TO DISPLAY
+    # dashboard3.place(x=0.01, y=0.52*(screen_height))
 
     # #################################################################################
     global das_arm_status
@@ -865,19 +871,19 @@ def creategui():
 
     # Jetson to ground
 
-    dashboard4 = ttk.LabelFrame(window)
+    # dashboard4 = ttk.LabelFrame(window)
     
-    dashboard4.columnconfigure(0, weight=1)
-    dashboard4.columnconfigure(1, weight=1)
+    # dashboard4.columnconfigure(0, weight=1)
+    # dashboard4.columnconfigure(1, weight=1)
 
-    #LABEL CREATION THIS EDITS NAMES ONLY
-    jetstatname = ttk.Label(dashboard4, text="Jetson Status", font=('None', 12))
-    jetstatname.grid(row=0,column=0,sticky="news", padx=10)
-    jetstat = ttk.Label(dashboard4, text="Status", font=('None', 12))
-    jetstat.grid(row=1,column=0,sticky="news", padx=10)
+    # #LABEL CREATION THIS EDITS NAMES ONLY
+    # jetstatname = ttk.Label(dashboard4, text="Jetson Status", font=('None', 12))
+    # jetstatname.grid(row=0,column=0,sticky="news", padx=10)
+    # jetstat = ttk.Label(dashboard4, text="Status", font=('None', 12))
+    # jetstat.grid(row=1,column=0,sticky="news", padx=10)
 
-    dashboard4.place(x=0.3*(screen_width), y=0.52*(screen_height))
-    #Var Ints
+    # dashboard4.place(x=0.3*(screen_width), y=0.52*(screen_height))
+    # #Var Ints
 
     # ##################################################################################################################################
 
@@ -977,12 +983,12 @@ def creategui():
         time = raw_TS.strftime("%H:%M:%S %p")
         timelabel.config(text=time)
         # window.after(1000, uptadeTime)
-        GPSaltvar.config(text="{:.1f} ft".format(data['GPSaltitude']))
-        altvar.config(text="{:.2f} ft".format(data['altitude']))  #### LETS ADD A UNIT TO THIS ####
+        GPSaltvar.config(text="{:.1f}".format(data['GPSaltitude']))
+        altvar.config(text="{:.2f}".format(data['altitude']))  #### LETS ADD A UNIT TO THIS ####
         hdgvar.config(text="{:.2f}".format(data['headingAngle']))
         latvar.config(text="{:.10f}".format(data['latitude']))
         longvar.config(text="{:.10f}".format(data['longitude']))
-        spdvar.config(text="{:.2f}".format(data['speed']))
+        # spdvar.config(text="{:.2f}".format(data['speed']))
         # pwrvar.config(text="{:}".format(data['powerstatus']))
         window.after(500, updateDashInfoFunction)
 
