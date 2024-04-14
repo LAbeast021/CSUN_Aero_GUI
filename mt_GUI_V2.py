@@ -16,6 +16,7 @@ from pymavlink import mavutil
 from multiprocessing import Process
 # ==================== Functions =====================
 from logSaver import saveLoggs
+from TESTING_Ground_Station_randy_code import sendCoord
 # ==================== END OF IMPORTS ================
 # ==================== GLOBAL VARIABLES ==============
 global mavconn_established
@@ -71,8 +72,11 @@ global sendPADALon
 global color_pwm
 color_pwm = 0
 
-sendPADALat = 34.1747008
-sendPADALon = -118.4816748
+global lastColor
+lastColor = -1
+
+sendPADALat = 34.175156
+sendPADALon = -118.481376
 
 global logArray
 logArray = []
@@ -198,7 +202,7 @@ datelabel.config(text=date)
 timelabel.config(text=time)
 
 #---------------------------- LOG TEXT BOX CREATION ----------------------------
-log = Text(window, height=int(0.025*(screen_height)), width=int(0.05*(screen_width)),xscrollcommand=True,yscrollcommand=True,state='normal')
+log = Text(window, height=int(0.03*(screen_height)), width=int(0.05*(screen_width)),xscrollcommand=True,yscrollcommand=True,state='normal')
 log.place(x=0.64*(screen_width), y=0.47*(screen_height))
 bold_font = font.Font(family='TkDefaultFont', size=10, weight='bold')
 
@@ -207,11 +211,11 @@ log.tag_configure("color2", foreground="orange", font=bold_font)
 log.tag_configure("color3", foreground="red", font=bold_font)
 log.tag_configure("color4", foreground="purple", font=bold_font)
 log.tag_configure("font1", font=("TkDefaultFont" , int(0.06*(screen_height))))
+log.tag_configure("font2", font=("TkDefaultFont" , int(0.19*(screen_height))))
 # log.tag_add("font1", "1.0", "end")
 
 log.insert(1.0, f"{timestamp} Welcome to the CSUN Aeronautics Ground Station Log\n")
 #---------------------------- END OF LOG TEXT BOX  ----------------------------
-
 #---------------------------- logging the data   ----------------------------
 def logSaverFunction():
     global log
@@ -221,7 +225,7 @@ def logSaverFunction():
     global timestamp
     log.insert(1.0, f"{timestamp} Saving Logs . . .\n" , "color4")
     saveLoggs(GPSLogger , event_listener)
-    log.insert(1.0, f"{timestamp} Logs Saved\n" , "color4")
+    log.insert(1.0, f"{timestamp} Logs Saved\n" , "color1")
 
 # --------------------------- Establishing connection to primary and PADA  . --------------------------
 def request_message_interval(message_id, frequency_hz , device):
@@ -333,7 +337,9 @@ def launch():
 
     mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
     rounded_altitude = math.floor(data['GPSaltitude']) 
-    log.insert(1.0, f"PADA Launched at {rounded_altitude} ft\n"  , "font1")
+    log.insert(1.0, f"PADA Launched at\n"  , "font1")
+    log.insert(1.0, f"{rounded_altitude} ft \n"  , "font2")
+
     # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
     # print(msg) 
     sleep(1)
@@ -406,13 +412,11 @@ def sendMissionToPADA(lat, lon , direction):
 
 def stopDetection():
     global DAS_runnning
-    
-    DAS_runnning = True
-    if DAS_runnning == True:
-        print(event_listener)
-        mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 1000 , 0 , 0, 0, 0, 0)
-        sleep(0.5)
-        log.insert(1.0, f"{timestamp} DAS STOPPED\n")    
+
+    print(event_listener)
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 3 , 1000 , 0 , 0, 0, 0, 0)
+    sleep(0.5)
+    log.insert(1.0, f"{timestamp} DAS STOPPED\n")    
 
 def initialization():
     # global detectedValue
@@ -527,6 +531,9 @@ def getHeartbeat():
     global timestamp
     global color_pwm
     global colorArray
+    global lastColor
+
+    detectedArray = []
 
     while True:
         GPSTuple = ()
@@ -538,7 +545,7 @@ def getHeartbeat():
         if mavconn_established == True and mav_conn is not None:
             globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
             if globalPosition is not None:
-                data['altitude'] = ((globalPosition.relative_alt * 3.2808 ) / 1000 ) 
+                # data['altitude'] = ((globalPosition.alt * 3.2808 ) / 1000 ) 
                 # if data["altitude"] < -1: #Chnage to airfield alt
                 #     data["altitude"] = 1
                 data['headingAngle'] = globalPosition.hdg / 100
@@ -551,7 +558,7 @@ def getHeartbeat():
             # ============================================
             GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
             if GPSRAW is not None:
-                data['GPSaltitude'] = math.floor((GPSRAW.alt * 3.2808) / 1000) -  704 # ADD ZERO TERM HERE
+                data['GPSaltitude'] = math.floor((GPSRAW.alt * 3.2808) / 1000) - 688 # ADD ZERO TERM HERE
 
                 if data["GPSaltitude"] < -10:
                     data["GPSaltitude"] = 1
@@ -573,16 +580,13 @@ def getHeartbeat():
             # if yaw_degree < 0:
             #     yaw_degree += 360
             # print(yaw_degree)
-            # ============================================
-            # signal = mav_conn.recv_match(type = 'RADIO_STATUS', blocking=True , timeout=1)
-            # if signal is not None:
-            #     # data['signalStrength'] = signal.rssi
-            #     print(signal.rssi)
             # ============================================ 
             GPSTuple = (data['latitude'], data['longitude'], data['altitude'], data['headingAngle'])
             GPSLogger.append(GPSTuple)
 
             servo_msg = mav_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True)
+            servo1 = servo_msg.servo1_raw
+
             # print(servo_msg)
             if not any(existing_code == servo_msg.servo5_raw for existing_code, _ in event_listener) and servo_msg.servo5_raw != 0:
                 if servo_msg.servo5_raw == 1500 and jetsonReady == False and servo_msg.servo5_raw != 0:
@@ -595,40 +599,51 @@ def getHeartbeat():
                     log.insert(1.0, f"{timestamp} code {servo_msg.servo5_raw} : Jetson ready \n", "color1")
 
             
-            if not any(existing_code == servo_msg.servo1_raw for existing_code, _ in event_listener) and servo_msg.servo1_raw != 0:
+            if not any(existing_code == servo1 for existing_code, _ in event_listener) and servo1 != 0:
 
-                event_listener.append((servo_msg.servo1_raw , datetime.now().strftime("%Y %m %d %H:%M:%S")))
+                event_listener.append((servo1 , datetime.now().strftime("%Y %m %d %H:%M:%S")))
 
-                if any(existing_code == servo_msg.servo1_raw for existing_code in errorCodes) :
-                    if servo_msg.servo1_raw not in errorRecieved:
+                if any(existing_code == servo1 for existing_code in errorCodes) :
+                    if servo1 not in errorRecieved:
                         errorHandled = True if errorHandled == False else ()
-                        errorRecieved.append(servo_msg.servo1_raw)
-                        log.insert(1.0, f"{timestamp} ERROR! CODE: {servo_msg.servo1_raw}\n", "color3")
+                        errorRecieved.append(servo1)
+                        log.insert(1.0, f"{timestamp} ERROR! CODE: {servo1}\n", "color3")
                         sysvar.set("Jetson Stopped ")
 
-                elif servo_msg.servo1_raw == 1440 and colorRecieved == True:
+                elif servo1 == 1440 and colorRecieved == True:
                     colorRecieved = False
-                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Detection Stopped \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo1} : Detection Stopped \n", "color1")
                 
-                elif servo_msg.servo1_raw == 1600 and colorWaitRecieved == False:
+                elif servo1 == 1600 and colorWaitRecieved == False:
                     colorWaitRecieved = True
-                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Jetson waiting for color ... \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo1} : Jetson waiting for color ... \n", "color1")
                     
-                elif servo_msg.servo1_raw ==1900 and statusRecieved == False:
+                elif servo1 ==1900 and statusRecieved == False:
                     statusRecieved = True
-                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Initialization on jetson was successful \n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo1} : Initialization on jetson was successful \n", "color1")
                     
-                elif servo_msg.servo1_raw == detectedValue :
-                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Detected a Target  \n", "color1")
+                elif 900 <= servo1 <= 920 and servo1 not in detectedArray:
+                    log.insert(1.0, f"{timestamp} code {servo1} : Detected a Target  \n", "color1")
+                    detectedArray.append(servo1)
                     
-                elif servo_msg.servo1_raw == 800 :
-                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : Did not detect a target  \n", "color2")
+                elif servo1 == 800 :
+                    log.insert(1.0, f"{timestamp}code 1440 : Detection Stopped. \n", "color1")
+                    sleep(1.5)
+                    log.insert(1.0, f"{timestamp}Mission count received: 2\n", "color1")
+                    coord = sendCoord()
+                    log.insert(1.0, f"{timestamp}Mission Received coordinates for target -> lat: {coord[0]}, lon: {coord[1]}\n")
+                    sendPADALat = coord[0]
+                    sendPADALon = coord[1]
+
+
+
                     
-                elif servo_msg.servo1_raw in colorPWM and colorRecieved == False:
+                elif servo1 in colorPWM and colorRecieved == False and lastColor != servo1:
+                    lastColor = servo1
                     colorRecieved = True
                     current_color = colorArray[colorPWM.index(servo_msg.servo8_raw)]
                     # rs.set(f"DAS Runnning | {current_color} ")
-                    log.insert(1.0, f"{timestamp} code {servo_msg.servo1_raw} : DAS running with color : {current_color}\n", "color1")
+                    log.insert(1.0, f"{timestamp} code {servo1} : DAS running with color : {current_color}\n", "color1")
                     DAS_runnning = True
 
                 if any(existing_code == 1440 for existing_code, _ in event_listener) and missionRecieved == False: 
@@ -984,7 +999,7 @@ def creategui():
         timelabel.config(text=time)
         # window.after(1000, uptadeTime)
         GPSaltvar.config(text="{:.1f}".format(data['GPSaltitude']))
-        altvar.config(text="{:.2f}".format(data['altitude']))  #### LETS ADD A UNIT TO THIS ####
+        altvar.config(text="NA")  #### LETS ADD A UNIT TO THIS ####
         hdgvar.config(text="{:.2f}".format(data['headingAngle']))
         latvar.config(text="{:.10f}".format(data['latitude']))
         longvar.config(text="{:.10f}".format(data['longitude']))

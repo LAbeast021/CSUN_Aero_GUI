@@ -1,15 +1,16 @@
 import serial
 from pymavlink import mavutil
-from dronekit import connect
-from flask import Flask, render_template
+# from dronekit import connect
+# from flask import Flask, render_template
 from pymavlink.dialects.v20 import common
-import RPi.GPIO as GPIO
+import random
+# import RPi.GPIO as GPIO
 import time
 
 # mav_conn = mavutil.mavlink_connection('/dev/ttyTHS0', baud=57600)  # Adjust the device path and baud rate as needed
-mav_conn = mavutil.mavlink_connection('/dev/ttyUSB1', baud=57600) 
-mav_conn.wait_heartbeat()
-print("HEARTBEAT FROM SYSTEM (SYSTEM %u - COMPONENT %u )" % (mav_conn.target_system , mav_conn.target_component))
+# mav_conn = mavutil.mavlink_connection('/dev/ttyUSB1', baud=57600) 
+# mav_conn.wait_heartbeat()
+# print("HEARTBEAT FROM SYSTEM (SYSTEM %u - COMPONENT %u )" % (mav_conn.target_system , mav_conn.target_component))
 # mav_conn2.wait_heartbeat()
 
 
@@ -25,13 +26,17 @@ yellow = 1850
 STOP = 1000 
 GO = 1500
 
-mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 3, GO, 0, 0 , 0, 0, 0)
-msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-print(msg)#change the type to any required info or remove type completly for all the information
+# mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 3, GO, 0, 0 , 0, 0, 0)
+# msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
+# print(msg)#change the type to any required info or remove type completly for all the information
+staticT = [(34.1749904,-118.4810458),(34.1750703,-118.4809761),(34.1750448,-118.4811223),(34.1751480,-118.4809667),(34.1751047,-118.4810700),(34.1750992,-118.4811933),(34.1751879,-118.4810458),(34.1753033,-118.4811947),(34.1752578,-118.4813207),(34.1752467,-118.4810928),(34.1751646,-118.481137),(34.1751657,-118.4812389),(34.1752334,-118.4812255)]
 
-mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 8, yellow, 0, 0 , 0, 0, 0)
-msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
-print(msg)#change the type to any required info or remove type completly for all the information
+def sendCoord ():
+    random_tuple = random.choice(staticT)
+    return random_tuple
+# mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component, mavutil.mavlink.MAV_CMD_DO_SET_SERVO,0, 8, yellow, 0, 0 , 0, 0, 0)
+# msg = mav_conn.recv_match(type='COMMAND_ACK' ,blocking=True)
+# print(msg)#change the type to any required info or remove type completly for all the information
 
 
 # if msg.servo1_raw == 1500:
