@@ -13,7 +13,7 @@ master = None
 global logWindow
 logWindow = None
 
-def upload_mission_from_array(waypoints):
+def upload_mission_from_array(waypoints , fieldAlt):
 
     waypointArray = waypoints
     success = False
@@ -62,6 +62,7 @@ def upload_mission_from_array(waypoints):
                                                 x, y, z)
                     print(f"Sending waypoint {seq}: Lat {x}, Lon {y}, Alt {z}")
                     logWindow.insert(1.0, f"Sending waypoint {seq}: Lat {x}, Lon {y}, Alt {z} \n", "color4")
+                    fieldAlt = fieldAlt - 10
                     if seq == len(waypointArray) - 1:
                         ack = master.recv_match(type='MISSION_ACK', blocking=True , timeout=4)
                         if ack and ack.type == mavutil.mavlink.MAV_MISSION_ACCEPTED:
@@ -120,7 +121,7 @@ def to_float(precision_output):
 
 
 # Initialize the waypoint generator with the provided coordinates
-def create_waypoints(lat, lon, direction_code , PADA_Conn , log):
+def create_waypoints(lat, lon, direction_code , PADA_Conn , log , fieldAlt):
     global master
     global logWindow
 
@@ -138,5 +139,5 @@ def create_waypoints(lat, lon, direction_code , PADA_Conn , log):
     master = PADA_Conn
     logWindow = log
 
-    upload_mission_from_array(waypoints)
+    upload_mission_from_array(waypoints , fieldAlt)
 

@@ -93,7 +93,8 @@ colorPWM = [1750, 1650, 1450, 1550, 1850]
 global detectedValue
 detectedValue = 898
 
-FIELD_ALTITUDE = 695 # in FEET
+global FIELD_ALTITUDE
+FIELD_ALTITUDE = 805 # in FEET
 
 global errorCodes
 errorCodes = [1200 , 1250 , 1950 ] # 1950 = Camera not detected, 1200 = Jetson not responding, 1250 = Jetson not ready
@@ -335,14 +336,22 @@ def launch():
 
     global PADA_conn
 
-    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
     rounded_altitude = math.floor(data['GPSaltitude']) 
+
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
+    sleep(0.2)
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
+    sleep(0.2)
+    mav_conn.mav.command_long_send(mav_conn.target_system, mav_conn.target_component,mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7 , 2100 , 0 , 0, 0, 0, 0)
+    sleep(0.8)
+
     log.insert(1.0, f"PADA Launched at\n"  , "font1")
     log.insert(1.0, f"{rounded_altitude} ft \n"  , "font2")
 
     # msg = mav_conn.recv_match(type = 'COMMAND_ACK', blocking=True)
     # print(msg) 
-    sleep(1)
     mode = 'AUTO'  # Define the mode you want to set; for ArduPilot, AUTO mode for autonomous operation
 
     # Find the mode ID for AUTO mode
@@ -364,6 +373,7 @@ def sendMissionToPADA(lat, lon , direction):
     global PADAconn_established
     global mav_conn
     global mav_conn_string
+    global FIELD_ALTITUDE
     
     from new_WayPoint_Generator import create_waypoints
 
@@ -387,7 +397,7 @@ def sendMissionToPADA(lat, lon , direction):
     # PADA_conn = None
     # PADAconn_established = False
 
-    thread1 = threading.Thread(target = create_waypoints, args=(lat, lon , direction_code, PADA_conn , log))
+    thread1 = threading.Thread(target = create_waypoints, args=(lat, lon , direction_code, PADA_conn , log , FIELD_ALTITUDE))
     thread1.start()
 
     sleep(1)
@@ -532,10 +542,12 @@ def getHeartbeat():
     global color_pwm
     global colorArray
     global lastColor
+    global FIELD_ALTITUDE
 
     detectedArray = []
 
     while True:
+
         GPSTuple = ()
         # get current time
         timestamp = datetime.now().strftime("[%H:%M:%S]")
@@ -545,7 +557,7 @@ def getHeartbeat():
         if mavconn_established == True and mav_conn is not None:
             globalPosition = mav_conn.recv_match(type = 'GLOBAL_POSITION_INT', blocking=True)
             if globalPosition is not None:
-                # data['altitude'] = ((globalPosition.alt * 3.2808 ) / 1000 ) 
+                data['altitude'] = ((globalPosition.alt * 3.2808 ) / 1000 ) 
                 # if data["altitude"] < -1: #Chnage to airfield alt
                 #     data["altitude"] = 1
                 data['headingAngle'] = globalPosition.hdg / 100
@@ -558,7 +570,7 @@ def getHeartbeat():
             # ============================================
             GPSRAW = mav_conn.recv_match(type = 'GPS_RAW_INT', blocking=True)
             if GPSRAW is not None:
-                data['GPSaltitude'] = math.floor((GPSRAW.alt * 3.2808) / 1000) - 688 # ADD ZERO TERM HERE
+                data['GPSaltitude'] = math.floor((GPSRAW.alt * 3.2808) / 1000) - FIELD_ALTITUDE # ADD ZERO TERM HERE
 
                 if data["GPSaltitude"] < -10:
                     data["GPSaltitude"] = 1
@@ -581,8 +593,8 @@ def getHeartbeat():
             #     yaw_degree += 360
             # print(yaw_degree)
             # ============================================ 
-            GPSTuple = (data['latitude'], data['longitude'], data['altitude'], data['headingAngle'])
-            GPSLogger.append(GPSTuple)
+            # GPSTuple = (data['latitude'], data['longitude'], data['altitude'], data['headingAngle'])
+            # GPSLogger.append(GPSTuple)
 
             servo_msg = mav_conn.recv_match(type='SERVO_OUTPUT_RAW' ,blocking=True)
             servo1 = servo_msg.servo1_raw
@@ -999,7 +1011,7 @@ def creategui():
         timelabel.config(text=time)
         # window.after(1000, uptadeTime)
         GPSaltvar.config(text="{:.1f}".format(data['GPSaltitude']))
-        altvar.config(text="NA")  #### LETS ADD A UNIT TO THIS ####
+        altvar.config(text="{:.1f}".format(data['altitude']))
         hdgvar.config(text="{:.2f}".format(data['headingAngle']))
         latvar.config(text="{:.10f}".format(data['latitude']))
         longvar.config(text="{:.10f}".format(data['longitude']))
